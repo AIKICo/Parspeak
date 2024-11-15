@@ -52,7 +52,7 @@ def record():
         with sd.RawInputStream(samplerate=args.samplerate, blocksize = 8000, device=args.device,
                 dtype="int16", channels=1, callback=callback):
             print("#" * 80)
-            print("Press 's' to start/stop the recording")
+            print("Press 'Ctrl+Cmd+S' to start/stop the recording")
             print("#" * 80)
 
             rec = KaldiRecognizer(model, args.samplerate)
@@ -63,6 +63,7 @@ def record():
             pressed_keys = set()
             def on_press(key):
                 nonlocal recording, break_loop, pressed_keys
+                global full_result  # Add this line
                 pressed_keys.add(key)
                 try:
                     if (keyboard.Key.ctrl in pressed_keys and
@@ -70,6 +71,13 @@ def record():
                         keyboard.KeyCode.from_char('s') in pressed_keys):
                         recording = not recording
                         print("Recording started..." if recording else "Recording stopped...")
+                        if not recording:
+                            # Recording stopped, display transcription
+                            full_result.append(rec.FinalResult())
+                            transcription = " ".join(full_result)
+                            print("Transcription:", transcription)
+                            full_result = []
+                            rec.Reset()
                     elif (keyboard.Key.ctrl in pressed_keys and
                         keyboard.Key.cmd in pressed_keys and
                         keyboard.KeyCode.from_char('q') in pressed_keys):
