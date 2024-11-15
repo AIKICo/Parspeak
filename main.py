@@ -60,20 +60,30 @@ def record():
             prev_recording = False
             break_loop = False  # Add a flag to exit the loop
 
+            pressed_keys = set()
             def on_press(key):
-                nonlocal recording, break_loop
+                nonlocal recording, break_loop, pressed_keys
+                pressed_keys.add(key)
                 try:
-                    if key.char == 's':
+                    if (keyboard.Key.ctrl in pressed_keys and
+                        keyboard.Key.cmd in pressed_keys and
+                        keyboard.KeyCode.from_char('s') in pressed_keys):
                         recording = not recording
                         print("Recording started..." if recording else "Recording stopped...")
-                    elif key.char == 'q':
+                    elif (keyboard.Key.ctrl in pressed_keys and
+                        keyboard.Key.cmd in pressed_keys and
+                        keyboard.KeyCode.from_char('q') in pressed_keys):
                         print("Exiting...")
                         break_loop = True
                         return False  # Stop the listener
                 except AttributeError:
                     pass
 
-            listener = keyboard.Listener(on_press=on_press)
+            def on_release(key):
+                if key in pressed_keys:
+                    pressed_keys.remove(key)
+
+            listener = keyboard.Listener(on_press=on_press, on_release=on_release)
             listener.start()  # Start the listener outside the loop
 
             while not break_loop:
