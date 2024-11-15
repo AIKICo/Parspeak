@@ -12,11 +12,13 @@ import threading
 from pynput import keyboard
 import os
 import time  # Import time module for sleep
+from datetime import datetime
 
 from vosk import Model, KaldiRecognizer
 
 q = queue.Queue()
 full_result = []
+MIN_RECORDING_DURATION = 0.5  # Minimum recording duration in seconds
 
 def int_or_str(text):
     """Helper function for argument parsing."""
@@ -55,14 +57,24 @@ def record():
             print("Press 'Ctrl+Cmd+S' to start/stop the recording")
             print("#" * 80)
 
-            rec = KaldiRecognizer(model, args.samplerate)
+            rec = None  # Move recognizer outside the recording logic
             recording = False
             prev_recording = False
             break_loop = False  # Add a flag to exit the loop
+            audio_data = []  # Add buffer for audio data
+            recording_start_time = None
+
+            def clear_audio_state():
+                nonlocal rec, audio_data, recording_start_time
+                while not q.empty():
+                    _ = q.get()  # Clear the queue
+                rec = None
+                audio_data = []
+                recording_start_time = None
 
             pressed_keys = set()
             def on_press(key):
-                nonlocal recording, break_loop, pressed_keys
+                nonlocal recording, break_loop, pressed_keys, rec, audio_data, recording_start_time  # Add rec and audio_data to nonlocal
                 global full_result  # Add this line
                 pressed_keys.add(key)
                 try:
@@ -70,17 +82,27 @@ def record():
                         keyboard.Key.cmd in pressed_keys and
                         keyboard.KeyCode.from_char('s') in pressed_keys):
                         recording = not recording
-                        print("Recording started..." if recording else "Recording stopped...")
-                        if not recording:
-                            # Recording stopped, display transcription
-                            full_result.append(rec.FinalResult())
-                            transcription = " ".join(full_result)
-                            print("Transcription:", transcription)
-                            full_result = []
-                            rec.Reset()
-                    elif (keyboard.Key.ctrl in pressed_keys and
-                        keyboard.Key.cmd in pressed_keys and
-                        keyboard.KeyCode.from_char('q') in pressed_keys):
+                        if recording:
+                            clear_audio_state()
+                            rec = KaldiRecognizer(model, args.samplerate)
+                            recording_start_time = datetime.now()
+                            print("Recording started...")
+                        else:
+                            print("Recording stopped...")
+                            if rec:
+                                time.sleep(0.1)  # Small delay before processing
+                                try:
+                                    final = rec.FinalResult()
+                                    if final:
+                                        full_result.append(final)
+                                        transcription = " ".join(full_result)
+                                        print("Transcription:", transcription)
+                                except Exception as e:
+                                    print("Error processing audio:", str(e))
+                                finally:
+                                    clear_audio_state()
+                                    full_result = []
+                    elif (keyboard.KeyCode.from_char('q') in pressed_keys):
                         print("Exiting...")
                         break_loop = True
                         return False  # Stop the listener
@@ -95,22 +117,39 @@ def record():
             listener.start()  # Start the listener outside the loop
 
             while not break_loop:
-                if recording:
-                    data = q.get()
-                    if rec.AcceptWaveform(data):
-                        full_result.append(rec.Result())
-                    else:
-                        full_result.append(rec.PartialResult())
-                    if dump_fn is not None:
-                        dump_fn.write(data)
+                if recording and rec:  # Check if rec exists
+                    try:
+                        if not q.empty():
+                            data = q.get()
+                            audio_data.append(data)  # Store audio data
+                            
+                            # Only process audio after minimum duration
+                            if recording_start_time and (datetime.now() - recording_start_time).total_seconds() >= MIN_RECORDING_DURATION:
+                                if rec.AcceptWaveform(data):
+                                    result = rec.Result()
+                                    if result and len(result) > 2:  # Check if result is not empty json '{}'
+                                        full_result.append(result)
+                                else:
+                                    partial = rec.PartialResult()
+                                    if partial and len(partial) > 2:
+                                        full_result.append(partial)
+                            
+                            if dump_fn is not None:
+                                dump_fn.write(data)
+                    except Exception as e:
+                        print("Error processing audio frame:", str(e))
                 else:
-                    if prev_recording:
-                        # Recording was just stopped
-                        full_result.append(rec.FinalResult())
-                        transcription = " ".join(full_result)
-                        print("Transcription:", transcription)
-                        full_result = []
-                        rec.Reset()
+                    if prev_recording and rec and audio_data:
+                        try:
+                            full_result.append(rec.FinalResult())
+                            transcription = " ".join(full_result)
+                            print("Transcription:", transcription)
+                        except Exception as e:
+                            print("Error getting final result:", str(e))
+                        finally:
+                            full_result = []
+                            audio_data = []
+                            rec = None
                     time.sleep(0.1)  # Pause briefly to prevent high CPU usage
                 prev_recording = recording
 
