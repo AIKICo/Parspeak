@@ -57,20 +57,26 @@ def record():
 
             rec = KaldiRecognizer(model, args.samplerate)
             recording = False
+            prev_recording = False
+            break_loop = False  # Add a flag to exit the loop
 
             def on_press(key):
-                nonlocal recording
+                nonlocal recording, break_loop
                 try:
                     if key.char == 's':
                         recording = not recording
                         print("Recording started..." if recording else "Recording stopped...")
+                    elif key.char == 'q':
+                        print("Exiting...")
+                        break_loop = True
+                        return False  # Stop the listener
                 except AttributeError:
                     pass
 
             listener = keyboard.Listener(on_press=on_press)
             listener.start()  # Start the listener outside the loop
 
-            while True:
+            while not break_loop:
                 if recording:
                     data = q.get()
                     if rec.AcceptWaveform(data):
@@ -80,7 +86,15 @@ def record():
                     if dump_fn is not None:
                         dump_fn.write(data)
                 else:
+                    if prev_recording:
+                        # Recording was just stopped
+                        full_result.append(rec.FinalResult())
+                        transcription = " ".join(full_result)
+                        print("Transcription:", transcription)
+                        full_result = []
+                        rec.Reset()
                     time.sleep(0.1)  # Pause briefly to prevent high CPU usage
+                prev_recording = recording
 
     except KeyboardInterrupt:
         print("\nDone")
