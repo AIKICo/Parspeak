@@ -8,10 +8,15 @@ import argparse
 import queue
 import sys
 import sounddevice as sd
+import threading
+from pynput import keyboard
+import os
+import time  # Import time module for sleep
 
 from vosk import Model, KaldiRecognizer
 
 q = queue.Queue()
+full_result = []
 
 def int_or_str(text):
     """Helper function for argument parsing."""
@@ -25,6 +30,63 @@ def callback(indata, frames, time, status):
     if status:
         print(status, file=sys.stderr)
     q.put(bytes(indata))
+
+def record():
+    global full_result
+    try:
+        if args.samplerate is None:
+            device_info = sd.query_devices(args.device, "input")
+            # soundfile expects an int, sounddevice provides a float:
+            args.samplerate = int(device_info["default_samplerate"])
+        
+        if args.model is None:
+            model = Model(lang="fa")
+        else:
+            model = Model(lang=args.model)
+
+        if args.filename:
+            dump_fn = open(args.filename, "wb")
+        else:
+            dump_fn = None
+
+        with sd.RawInputStream(samplerate=args.samplerate, blocksize = 8000, device=args.device,
+                dtype="int16", channels=1, callback=callback):
+            print("#" * 80)
+            print("Press 's' to start/stop the recording")
+            print("#" * 80)
+
+            rec = KaldiRecognizer(model, args.samplerate)
+            recording = False
+
+            def on_press(key):
+                nonlocal recording
+                try:
+                    if key.char == 's':
+                        recording = not recording
+                        print("Recording started..." if recording else "Recording stopped...")
+                except AttributeError:
+                    pass
+
+            listener = keyboard.Listener(on_press=on_press)
+            listener.start()  # Start the listener outside the loop
+
+            while True:
+                if recording:
+                    data = q.get()
+                    if rec.AcceptWaveform(data):
+                        full_result.append(rec.Result())
+                    else:
+                        full_result.append(rec.PartialResult())
+                    if dump_fn is not None:
+                        dump_fn.write(data)
+                else:
+                    time.sleep(0.1)  # Pause briefly to prevent high CPU usage
+
+    except KeyboardInterrupt:
+        print("\nDone")
+        parser.exit(0)
+    except Exception as e:
+        parser.exit(type(e).__name__ + ": " + str(e))
 
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument(
@@ -50,40 +112,11 @@ parser.add_argument(
     "-m", "--model", type=str, help="language model; e.g. en-us, fr, nl; default is en-us")
 args = parser.parse_args(remaining)
 
-try:
-    if args.samplerate is None:
-        device_info = sd.query_devices(args.device, "input")
-        # soundfile expects an int, sounddevice provides a float:
-        args.samplerate = int(device_info["default_samplerate"])
-        
-    if args.model is None:
-        model = Model(lang="fa")
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        print("Script is not running as root. Attempting to elevate privileges...")
+        args = ['sudo', sys.executable] + sys.argv
+        os.execvp('sudo', args)
     else:
-        model = Model(lang=args.model)
-
-    if args.filename:
-        dump_fn = open(args.filename, "wb")
-    else:
-        dump_fn = None
-
-    with sd.RawInputStream(samplerate=args.samplerate, blocksize = 8000, device=args.device,
-            dtype="int16", channels=1, callback=callback):
-        print("#" * 80)
-        print("Press Ctrl+C to stop the recording")
-        print("#" * 80)
-
-        rec = KaldiRecognizer(model, args.samplerate)
-        while True:
-            data = q.get()
-            if rec.AcceptWaveform(data):
-                print(rec.Result())
-            else:
-                print(rec.PartialResult())
-            if dump_fn is not None:
-                dump_fn.write(data)
-
-except KeyboardInterrupt:
-    print("\nDone")
-    parser.exit(0)
-except Exception as e:
-    parser.exit(type(e).__name__ + ": " + str(e))
+        record()
+        print("Full result:", " ".join(full_result))
