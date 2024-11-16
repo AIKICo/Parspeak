@@ -3,13 +3,12 @@ import sys
 import sounddevice as sd
 from pynput import keyboard
 import os
-import time  # Import time module for sleep
+import time
 from datetime import datetime
 
 from vosk import Model, KaldiRecognizer
 
 q = queue.Queue()
-full_result = []
 MIN_RECORDING_DURATION = 0.5  # Minimum recording duration in seconds
 
 def callback(indata, frames, time, status):
@@ -19,7 +18,7 @@ def callback(indata, frames, time, status):
     q.put(bytes(indata))
 
 def record():
-    global full_result
+    full_result = []  # Moved inside the function
     try:
         # Use default device and sample rate
         device_info = sd.query_devices(None, "input")
@@ -35,7 +34,7 @@ def record():
         with sd.RawInputStream(samplerate=samplerate, blocksize = 8000, device=device,
                 dtype="int16", channels=1, callback=callback):
             print("#" * 80)
-            print("Press 'Ctrl+Cmd+S' to start/stop the recording")
+            print("Press 'Ctrl+Shift+S' to start/stop the recording")
             print("#" * 80)
 
             rec = None  # Move recognizer outside the recording logic
@@ -55,12 +54,11 @@ def record():
 
             pressed_keys = set()
             def on_press(key):
-                nonlocal recording, break_loop, pressed_keys, rec, audio_data, recording_start_time  # Add rec and audio_data to nonlocal
-                global full_result  # Add this line
+                nonlocal recording, break_loop, pressed_keys, rec, audio_data, recording_start_time, full_result
                 pressed_keys.add(key)
                 try:
                     if (keyboard.Key.ctrl in pressed_keys and
-                        keyboard.Key.cmd in pressed_keys and
+                        keyboard.Key.shift in pressed_keys and
                         keyboard.KeyCode.from_char('s') in pressed_keys):
                         recording = not recording
                         if recording:
@@ -78,6 +76,10 @@ def record():
                                         full_result.append(final)
                                         transcription = " ".join(full_result)
                                         print("Transcription:", transcription)
+                                        # Save transcription to a file
+                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                        with open(f"transcription_{timestamp}.txt", "w") as f:
+                                            f.write(transcription)
                                 except Exception as e:
                                     print("Error processing audio:", str(e))
                                 finally:
@@ -147,4 +149,3 @@ if __name__ == "__main__":
         os.execvp('sudo', args)
     else:
         record()
-        print("Full result:", " ".join(full_result))
