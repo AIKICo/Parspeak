@@ -11,13 +11,20 @@ def run_pyinstaller():
     logging.info('Running PyInstaller...')
     script_name = 'main.py'
     try:
+        # Get the virtual environment path
+        venv_path = os.path.join(os.getcwd(), '.venv')
+        site_packages = os.path.join(venv_path, 'lib', 'python3.11', 'site-packages')
+        kivy_path = os.path.join(site_packages, 'kivy')
+        
         # Basic PyInstaller arguments
         pyinstaller_args = [
             # Core dependencies
             '--collect-all', 'vosk',
-            '--collect-all', 'sounddevice',
-            '--collect-all', 'numpy',
             '--collect-all', 'pynput',
+            '--collect-all', 'pyperclip',
+            '--collect-all', '_sounddevice_data',  # Add sounddevice data
+            # Kivy-specific settings
+            '--add-data', f'{kivy_path}:kivy',
             # Additional settings
             '--name', 'VoskTranscriber',
             '--windowed',
@@ -26,10 +33,23 @@ def run_pyinstaller():
             '--noconfirm',
             '--osx-bundle-identifier', 'com.vosktranscriber.app',
             # Hidden imports
-            '--hidden-import', 'vosk',
             '--hidden-import', 'sounddevice',
-            '--hidden-import', 'numpy',
-            '--hidden-import', 'pynput',
+            '--hidden-import', '_sounddevice_data',
+            '--hidden-import', 'sounddevice_build_info',
+            '--hidden-import', 'kivy.core.window.window_sdl2',
+            '--hidden-import', 'kivy.core.text.text_sdl2',
+            '--hidden-import', 'kivy.core.text.markup',
+            '--hidden-import', 'kivy.core.image',
+            '--hidden-import', 'kivy.core.clipboard.clipboard_sdl2',
+            '--hidden-import', 'kivy.uix.widget',
+            '--hidden-import', 'kivy.uix.label',
+            '--hidden-import', 'kivy.uix.floatlayout',
+            '--hidden-import', 'kivy.lang',
+            '--hidden-import', 'kivy.input.providers.mouse',
+            '--hidden-import', 'kivy.input.providers.mactouch',
+            '--hidden-import', 'vosk',
+            '--hidden-import', 'pynput.keyboard._darwin',
+            '--hidden-import', 'pyperclip',
         ]
 
         # Remove architecture-specific settings and let PyInstaller auto-detect
