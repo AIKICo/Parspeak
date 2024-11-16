@@ -5,6 +5,8 @@ from pynput import keyboard
 import os
 import time
 from datetime import datetime
+import tkinter as tk
+import threading  # Import threading module
 
 from vosk import Model, KaldiRecognizer
 
@@ -17,7 +19,7 @@ def callback(indata, frames, time, status):
         print(status, file=sys.stderr)
     q.put(bytes(indata))
 
-def record():
+def record(transcription_queue, control_event):
     full_result = []  # Moved inside the function
     try:
         # Use default device and sample rate
@@ -66,6 +68,8 @@ def record():
                             rec = KaldiRecognizer(model, samplerate)
                             recording_start_time = datetime.now()
                             print("Recording started...")
+                            # Signal the main thread to show the window
+                            transcription_queue.put(("show", None))
                         else:
                             print("Recording stopped...")
                             if rec:
@@ -80,14 +84,20 @@ def record():
                                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                         with open(f"transcription_{timestamp}.txt", "w") as f:
                                             f.write(transcription)
+                                        # Send final transcription to the GUI
+                                        transcription_queue.put(("update", transcription))
                                 except Exception as e:
                                     print("Error processing audio:", str(e))
                                 finally:
                                     clear_audio_state()
                                     full_result = []
+                            # Signal the main thread to hide the window
+                            transcription_queue.put(("hide", None))
                     elif (keyboard.KeyCode.from_char('q') in pressed_keys):
                         print("Exiting...")
                         break_loop = True
+                        # Signal the main thread to close the window
+                        transcription_queue.put(("exit", None))
                         return False  # Stop the listener
                 except AttributeError:
                     pass
@@ -112,10 +122,13 @@ def record():
                                     result = rec.Result()
                                     if result and len(result) > 2:  # Check if result is not empty json '{}'
                                         full_result.append(result)
+                                        transcription = " ".join(full_result)
+                                        transcription_queue.put(("update", transcription))
                                 else:
                                     partial = rec.PartialResult()
                                     if partial and len(partial) > 2:
-                                        full_result.append(partial)
+                                        transcription = partial
+                                        transcription_queue.put(("update", transcription))
                             
                             if dump_fn is not None:
                                 dump_fn.write(data)
@@ -142,10 +155,74 @@ def record():
     except Exception as e:
         sys.exit(type(e).__name__ + ": " + str(e))
 
+    # Signal the control event to stop the main loop
+    control_event.set()
+
+# Main thread code
 if __name__ == "__main__":
     if os.geteuid() != 0:
         print("Script is not running as root. Attempting to elevate privileges...")
         args = ['sudo', sys.executable] + sys.argv
         os.execvp('sudo', args)
     else:
-        record()
+        # Create a queue to communicate with the GUI
+        transcription_queue = queue.Queue()
+        control_event = threading.Event()
+
+        # Start the recording function in a separate thread
+        recording_thread = threading.Thread(target=record, args=(transcription_queue, control_event))
+        recording_thread.start()
+
+        # Initialize Tkinter window in the main thread
+        root = tk.Tk()
+        root.overrideredirect(True)  # Remove window decorations
+        root.attributes("-topmost", True)  # Keep the window on top
+
+        # Platform-specific transparency settings
+        if sys.platform.startswith('win'):
+            root.attributes("-transparentcolor", root['bg'])  # Windows-specific transparent background
+        elif sys.platform.startswith('darwin'):
+            root.wm_attributes("-transparent", True)  # Enable transparency on macOS
+            root.configure(bg='systemTransparent')
+        else:
+            root.attributes("-alpha", 0.7)  # Set window opacity for other systems
+
+        # Position the window at the middle top
+        screen_width = root.winfo_screenwidth()
+        window_width = screen_width // 2
+        window_height = 50  # Adjust height as needed
+        x_position = (screen_width - window_width) // 2
+        y_position = 10  # Slightly below the top edge
+        root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
+
+        # Create label to display transcription
+        transcription_label = tk.Label(root, text="", font=("Helvetica", 16), fg="black", bg=root['bg'])
+        transcription_label.pack(expand=True)
+
+        root.withdraw()  # Hide the window initially
+
+        def process_queue():
+            try:
+                while True:
+                    action, message = transcription_queue.get_nowait()
+                    if action == "show":
+                        root.deiconify()  # Show the window
+                    elif action == "hide":
+                        root.withdraw()  # Hide the window
+                        transcription_label.config(text="")
+                    elif action == "update":
+                        transcription_label.config(text=message)
+                    elif action == "exit":
+                        root.destroy()
+                        return
+                    transcription_queue.task_done()
+            except queue.Empty:
+                pass
+            root.after(50, process_queue)  # Check the queue every 50ms
+
+        # Start processing the queue
+        root.after(0, process_queue)
+        root.mainloop()
+
+        # Wait for the recording thread to finish
+        recording_thread.join()
