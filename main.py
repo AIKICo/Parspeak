@@ -12,7 +12,7 @@ import arabic_reshaper
 from vosk import Model, KaldiRecognizer
 from bidi.algorithm import get_display
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QLocale
 from PyQt6.QtGui import QFont, QFontDatabase
 
 # ...existing imports and queue/state definitions...
@@ -43,9 +43,11 @@ class TranscriptionWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)  # Add this line
         
-        # Create label for transcription text
+        # Create label for transcription text with RTL support
         self.label = QLabel(self)
         self.label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.label.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
         self.label.setStyleSheet("""
             QLabel {
                 color: white;
@@ -54,8 +56,15 @@ class TranscriptionWindow(QWidget):
                 border-radius: 5px;
                 width: 100%;
                 height: 100%;
+                text-align: right;
+                direction: rtl;
             }
         """)
+        
+        # Set locale for RTL text
+        locale = QLocale(QLocale.Language.Persian)
+        self.setLocale(locale)
+        self.label.setLocale(locale)
         
         # Use the loaded font
         font = QFont(self.font_family, 12)
@@ -83,10 +92,8 @@ class TranscriptionWindow(QWidget):
         self.activateWindow()
 
     def process_text(self, text):
-        # Reshape and reorder the text for proper RTL display
-        reshaped_text = arabic_reshaper.reshape(text)
-        bidi_text = get_display(reshaped_text)
-        return bidi_text
+        # Only reshape, don't use bidi as Qt handles text direction
+        return arabic_reshaper.reshape(text)
 
     def process_queue(self):
         try:
