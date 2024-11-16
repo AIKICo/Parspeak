@@ -41,13 +41,14 @@ class TranscriptionWindow(QWidget):
             Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)  # Add this line
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         
-        # Create label for transcription text with RTL support
+        # Create label for transcription text
         self.label = QLabel(self)
-        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center alignment
-        self.label.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Remove setLayoutDirection as we'll handle RTL in CSS
+        
+        # Updated stylesheet with correct RTL handling
         self.label.setStyleSheet(f"""
             QLabel {{
                 color: white;
@@ -57,13 +58,13 @@ class TranscriptionWindow(QWidget):
                 width: 100%;
                 height: 100%;
                 text-align: center;
-                direction: rtl;
+                qproperty-alignment: AlignCenter;
                 font-family: {self.font_family};
                 font-size: 14px;
             }}
         """)
         
-        # Set locale for RTL text
+        # Set locale for Persian text
         locale = QLocale(QLocale.Language.Persian)
         self.setLocale(locale)
         self.label.setLocale(locale)
@@ -96,7 +97,7 @@ class TranscriptionWindow(QWidget):
         self.activateWindow()
 
     def process_text(self, text):
-        # Only reshape, don't use bidi as Qt handles text direction
+        # Reshape Arabic/Persian text without using bidi
         return arabic_reshaper.reshape(text)
 
     def process_queue(self):
