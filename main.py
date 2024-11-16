@@ -1,14 +1,7 @@
-#!/usr/bin/env python3
-
-# prerequisites: as described in https://alphacephei.com/vosk/install and also python module `sounddevice` (simply run command `pip install sounddevice`)
-# Example usage using Dutch (nl) recognition model: `python test_microphone.py -m nl`
-# For more help run: `python test_microphone.py -h`
-
 import argparse
 import queue
 import sys
 import sounddevice as sd
-import threading
 from pynput import keyboard
 import os
 import time  # Import time module for sleep
