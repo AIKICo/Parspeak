@@ -177,15 +177,8 @@ if __name__ == "__main__":
         root = tk.Tk()
         root.overrideredirect(True)  # Remove window decorations
         root.attributes("-topmost", True)  # Keep the window on top
-
-        # Platform-specific transparency settings
-        if sys.platform.startswith('win'):
-            root.attributes("-transparentcolor", root['bg'])  # Windows-specific transparent background
-        elif sys.platform.startswith('darwin'):
-            root.wm_attributes("-transparent", True)  # Enable transparency on macOS
-            root.configure(bg='systemTransparent')
-        else:
-            root.attributes("-alpha", 0.7)  # Set window opacity for other systems
+        root.configure(bg='black')  # Set background color to black
+        root.attributes('-alpha', 0.5)  # Set window opacity to 70%
 
         # Position the window at the middle top
         screen_width = root.winfo_screenwidth()
@@ -196,7 +189,7 @@ if __name__ == "__main__":
         root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
 
         # Create label to display transcription
-        transcription_label = tk.Label(root, text="", font=("Helvetica", 16), fg="black", bg=root['bg'])
+        transcription_label = tk.Label(root, text="", font=("Helvetica", 16), fg="white", bg='black')
         transcription_label.pack(expand=True)
 
         root.withdraw()  # Hide the window initially
