@@ -6,16 +6,104 @@ from pynput import keyboard
 import os
 import time
 from datetime import datetime
-import tkinter as tk
 import threading
-import pyperclip  # Add this import at the top
+import pyperclip
+
+from kivy.app import App
+from kivy.uix.label import Label
+from kivy.uix.widget import Widget
+from kivy.core.window import Window
+from kivy.clock import Clock
+from kivy.properties import StringProperty
+from kivy.lang import Builder
 
 from vosk import Model, KaldiRecognizer
 
-q = queue.Queue()
-MIN_RECORDING_DURATION = 0.5  # Minimum recording duration in seconds
+# Update the Kivy UI string
+Builder.load_string('''
+<TranscriptionWidget>:
+    FloatLayout:
+        Label:
+            text: root.transcription_text
+            size_hint: 1, 1
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            color: 1, 1, 1, 1
+            font_size: '16sp'
+''')
 
-# Define a global variable for accumulated results
+class TranscriptionWidget(Widget):
+    transcription_text = StringProperty("")
+
+class TranscriptionApp(App):
+    def __init__(self, transcription_queue, control_event, **kwargs):
+        super().__init__(**kwargs)
+        self.transcription_queue = transcription_queue
+        self.control_event = control_event
+        self.widget = None
+        self.window_visible = False  # Add this line
+        
+    def build(self):
+        # Create widget first
+        self.widget = TranscriptionWidget()
+        
+        # Configure window after creation
+        Window.borderless = True
+        Window.always_on_top = True
+        
+        # Calculate window size and position
+        screen_width = Window.system_size[0]
+        window_width = screen_width // 2
+        Window.size = (window_width, 50)
+        
+        # Position window at top center
+        Window.top = 10
+        Window.left = (screen_width - window_width) // 2
+        
+        # Set window properties
+        Window.clearcolor = (0, 0, 0, 0.5)
+        
+        # Hide window initially
+        self._hide_window()
+        
+        # Schedule queue processing
+        Clock.schedule_interval(self.process_queue, 0.05)
+        
+        return self.widget
+
+    def _show_window(self):
+        if not self.window_visible:
+            Window.show()
+            self.window_visible = True
+
+    def _hide_window(self):
+        if self.window_visible:
+            Window.hide()
+            self.window_visible = False
+
+    def process_queue(self, dt):
+        try:
+            while True:
+                action, message = self.transcription_queue.get_nowait()
+                if action == "show":
+                    self._show_window()
+                elif action == "hide":
+                    self._hide_window()
+                    self.widget.transcription_text = ""
+                elif action == "update":
+                    self.widget.transcription_text = message
+                elif action == "exit":
+                    self._hide_window()
+                    self.stop()
+                    return False
+                self.transcription_queue.task_done()
+        except queue.Empty:
+            pass
+        return True
+
+# Keep existing queue and TranscriptionState class
+q = queue.Queue()
+MIN_RECORDING_DURATION = 0.5
+
 class TranscriptionState:
     def __init__(self):
         self.full_result = []
@@ -23,12 +111,13 @@ class TranscriptionState:
 
 transcription_state = TranscriptionState()
 
+# Keep existing callback function
 def callback(indata, frames, time, status):
-    """This is called (from a separate thread) for each audio block."""
     if status:
         print(status, file=sys.stderr)
     q.put(bytes(indata))
 
+# Keep existing record function unchanged
 def record(transcription_queue, control_event):
     try:
         # Use default device and sample rate
@@ -186,62 +275,22 @@ def record(transcription_queue, control_event):
     control_event.set()
 
 # Main thread code
-if os.geteuid() != 0:
-    print("Script is not running as root. Attempting to elevate privileges...")
-    args = ['sudo', sys.executable] + sys.argv
-    os.execvp('sudo', args)
-else:
-    # Create a queue to communicate with the GUI
-    transcription_queue = queue.Queue()
-    control_event = threading.Event()
+if __name__ == '__main__':
+    if os.geteuid() != 0:
+        print("Script is not running as root. Attempting to elevate privileges...")
+        args = ['sudo', sys.executable] + sys.argv
+        os.execvp('sudo', args)
+    else:
+        transcription_queue = queue.Queue()
+        control_event = threading.Event()
 
-    # Start the recording function in a separate thread
-    recording_thread = threading.Thread(target=record, args=(transcription_queue, control_event))
-    recording_thread.start()
+        # Start the recording function in a separate thread
+        recording_thread = threading.Thread(target=record, args=(transcription_queue, control_event))
+        recording_thread.start()
 
-    # Initialize Tkinter window in the main thread
-    root = tk.Tk()
-    root.overrideredirect(True)  # Remove window decorations
-    root.attributes("-topmost", True)  # Keep the window on top
-    root.configure(bg='black')  # Set background color to black
-    root.attributes('-alpha', 0.5)  # Set window opacity to 70%
+        # Run the Kivy application
+        app = TranscriptionApp(transcription_queue, control_event)
+        app.run()
 
-    # Position the window at the middle top
-    screen_width = root.winfo_screenwidth()
-    window_width = screen_width // 2
-    window_height = 50  # Adjust height as needed
-    x_position = (screen_width - window_width) // 2
-    y_position = 10  # Slightly below the top edge
-    root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
-
-    # Create label to display transcription
-    transcription_label = tk.Label(root, text="", font=("Helvetica", 16), fg="white", bg='black')
-    transcription_label.pack(expand=True)
-
-    root.withdraw()  # Hide the window initially
-
-    def process_queue():
-        try:
-            while True:
-                action, message = transcription_queue.get_nowait()
-                if action == "show":
-                    root.deiconify()  # Show the window
-                elif action == "hide":
-                    root.withdraw()  # Hide the window
-                    transcription_label.config(text="")
-                elif action == "update":
-                    transcription_label.config(text=message)
-                elif action == "exit":
-                    root.destroy()
-                    return
-                transcription_queue.task_done()
-        except queue.Empty:
-            pass
-        root.after(50, process_queue)  # Check the queue every 50ms
-
-    # Start processing the queue
-    root.after(0, process_queue)
-    root.mainloop()
-
-    # Wait for the recording thread to finish
-    recording_thread.join()
+        # Wait for the recording thread to finish
+        recording_thread.join()
