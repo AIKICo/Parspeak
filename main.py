@@ -1,5 +1,6 @@
 import queue
 import sys
+import json  # Add this import
 import sounddevice as sd
 from pynput import keyboard
 import os
@@ -120,15 +121,19 @@ def record(transcription_queue, control_event):
                             if recording_start_time and (datetime.now() - recording_start_time).total_seconds() >= MIN_RECORDING_DURATION:
                                 if rec.AcceptWaveform(data):
                                     result = rec.Result()
-                                    if result and len(result) > 2:  # Check if result is not empty json '{}'
-                                        full_result.append(result)
-                                        transcription = " ".join(full_result)
-                                        transcription_queue.put(("update", transcription))
+                                    if result and len(result) > 2:
+                                        result_dict = json.loads(result)
+                                        if "text" in result_dict and result_dict["text"]:
+                                            full_result.append(result_dict["text"])
+                                            transcription = " ".join(full_result)
+                                            transcription_queue.put(("update", transcription))
                                 else:
                                     partial = rec.PartialResult()
                                     if partial and len(partial) > 2:
-                                        transcription = partial
-                                        transcription_queue.put(("update", transcription))
+                                        partial_dict = json.loads(partial)
+                                        if "partial" in partial_dict:
+                                            transcription = partial_dict["partial"]
+                                            transcription_queue.put(("update", transcription))
                             
                             if dump_fn is not None:
                                 dump_fn.write(data)
@@ -137,9 +142,12 @@ def record(transcription_queue, control_event):
                 else:
                     if prev_recording and rec and audio_data:
                         try:
-                            full_result.append(rec.FinalResult())
-                            transcription = " ".join(full_result)
-                            print("Transcription:", transcription)
+                            final_result = rec.FinalResult()
+                            final_dict = json.loads(final_result)
+                            if "text" in final_dict and final_dict["text"]:
+                                full_result.append(final_dict["text"])
+                                transcription = " ".join(full_result)
+                                print("Transcription:", transcription)
                         except Exception as e:
                             print("Error getting final result:", str(e))
                         finally:
