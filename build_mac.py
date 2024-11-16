@@ -1,6 +1,7 @@
 import os
 import logging
 import shutil
+import platform
 import PyInstaller.__main__
 
 def setup_logging():
@@ -10,7 +11,8 @@ def run_pyinstaller():
     logging.info('Running PyInstaller...')
     script_name = 'main.py'
     try:
-        PyInstaller.__main__.run([
+        # Basic PyInstaller arguments
+        pyinstaller_args = [
             # Core dependencies
             '--collect-all', 'vosk',
             '--collect-all', 'sounddevice',
@@ -22,15 +24,17 @@ def run_pyinstaller():
             '--onedir',
             '--clean',
             '--noconfirm',
-            '--target-arch', 'x86_64',
             '--osx-bundle-identifier', 'com.vosktranscriber.app',
             # Hidden imports
             '--hidden-import', 'vosk',
             '--hidden-import', 'sounddevice',
             '--hidden-import', 'numpy',
             '--hidden-import', 'pynput',
-            script_name
-        ])
+        ]
+
+        # Remove architecture-specific settings and let PyInstaller auto-detect
+        PyInstaller.__main__.run(pyinstaller_args + [script_name])
+        
     except Exception as e:
         logging.error(f'PyInstaller failed: {e}')
         raise
