@@ -9,41 +9,78 @@ from datetime import datetime
 import threading
 import pyperclip
 import arabic_reshaper
-from bidi.algorithm import get_display
-
-from kivy.app import App
-from kivy.uix.label import Label
-from kivy.uix.widget import Widget
-from kivy.core.window import Window
-from kivy.clock import Clock
-from kivy.properties import StringProperty
-from kivy.lang import Builder
-from kivy.core.text import LabelBase
 from vosk import Model, KaldiRecognizer
-# Register a font that supports Persian characters
-LabelBase.register(name='Vazir',
-                  fn_regular='fonts/Vazirmatn-Regular.ttf')  # Make sure to place Vazir.ttf in your project directory
+from bidi.algorithm import get_display
+from PyQt6.QtWidgets import QApplication, QLabel, QWidget
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont, QFontDatabase
 
-# Update the Kivy UI string with RTL support
-Builder.load_string('''
-<TranscriptionWidget>:
-    FloatLayout:
-        Label:
-            text: root.transcription_text
-            size_hint: 1, 1
-            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-            color: 1, 1, 1, 1
-            font_size: '16sp'
-            font_name: 'Vazir'
-            text_size: self.size
-            halign: 'right'  # RTL alignment
-            valign: 'middle'
-            shorten: False
-            markup: True
-''')
+# ...existing imports and queue/state definitions...
 
-class TranscriptionWidget(Widget):
-    transcription_text = StringProperty("")
+class TranscriptionWindow(QWidget):
+    def __init__(self, transcription_queue, control_event, font_family="Arial"):
+        super().__init__()
+        self.transcription_queue = transcription_queue
+        self.control_event = control_event
+        self.font_family = font_family
+        self.init_ui()
+        
+        # Setup timer for queue processing
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.process_queue)
+        self.timer.start(50)  # 50ms interval
+        
+        # Start hidden
+        self.hide()
+
+    def init_ui(self):
+        # Set window flags for transparency and always on top
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool |
+            Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)  # Add this line
+        
+        # Create label for transcription text
+        self.label = QLabel(self)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.label.setStyleSheet("""
+            QLabel {
+                color: white;
+                background-color: rgba(0, 0, 0, 150);
+                padding: 10px;
+                border-radius: 5px;
+                width: 100%;
+                height: 100%;
+            }
+        """)
+        
+        # Use the loaded font
+        font = QFont(self.font_family, 12)
+        self.label.setFont(font)
+        
+        # Set window size and position
+        screen = QApplication.primaryScreen().geometry()
+        window_width = screen.width() // 2
+        window_height = 100
+        
+        # Position window at top center
+        self.setGeometry(
+            (screen.width() - window_width) // 2,
+            10,
+            window_width,
+            window_height
+        )
+        
+        # Make label fill the entire window
+        self.label.setGeometry(0, 0, window_width, window_height)
+
+    def show(self):
+        super().show()
+        self.raise_()
+        self.activateWindow()
 
     def process_text(self, text):
         # Reshape and reorder the text for proper RTL display
@@ -51,73 +88,27 @@ class TranscriptionWidget(Widget):
         bidi_text = get_display(reshaped_text)
         return bidi_text
 
-class TranscriptionApp(App):
-    def __init__(self, transcription_queue, control_event, **kwargs):
-        super().__init__(**kwargs)
-        self.transcription_queue = transcription_queue
-        self.control_event = control_event
-        self.widget = None
-        self.window_visible = False
-        
-    def build(self):
-        # Create widget first
-        self.widget = TranscriptionWidget()
-        
-        # Configure window after creation
-        Window.borderless = True
-        Window.always_on_top = True
-        
-        # Update window size to accommodate Persian text better
-        screen_width = Window.system_size[0]
-        window_width = screen_width // 2
-        Window.size = (window_width, 100)  # Increased height for better visibility
-        
-        # Position window at top center
-        Window.top = 10
-        Window.left = (screen_width - window_width) // 2
-        
-        # Set window properties
-        Window.clearcolor = (0, 0, 0, 0.5)
-        
-        # Hide window initially
-        self._hide_window()
-        
-        # Schedule queue processing
-        Clock.schedule_interval(self.process_queue, 0.05)
-        
-        return self.widget
-
-    def _show_window(self):
-        if not self.window_visible:
-            Window.show()
-            self.window_visible = True
-
-    def _hide_window(self):
-        if self.window_visible:
-            Window.hide()
-            self.window_visible = False
-
-    def process_queue(self, dt):
+    def process_queue(self):
         try:
             while True:
                 action, message = self.transcription_queue.get_nowait()
                 if action == "show":
-                    self._show_window()
+                    self.show()
                 elif action == "hide":
-                    self._hide_window()
-                    self.widget.transcription_text = ""
+                    self.hide()
+                    self.label.setText("")
                 elif action == "update":
-                    # Process the text before displaying
-                    processed_text = self.widget.process_text(message)
-                    self.widget.transcription_text = processed_text
+                    processed_text = self.process_text(message)
+                    self.label.setText(processed_text)
+                    if not self.isVisible():
+                        self.show()
                 elif action == "exit":
-                    self._hide_window()
-                    self.stop()
-                    return False
+                    self.close()  # Change this line
+                    QApplication.quit()
                 self.transcription_queue.task_done()
         except queue.Empty:
             pass
-        return True
+        return True  # Keep the timer running
 
 # Keep existing queue and TranscriptionState class
 q = queue.Queue()
@@ -293,13 +284,13 @@ def record(transcription_queue, control_event):
     # Signal the control event to stop the main loop
     control_event.set()
 
-# Main thread code
+# Update the main section to use PyQt instead of Kivy
 if __name__ == '__main__':
     try:
         transcription_queue = queue.Queue()
         control_event = threading.Event()
 
-        # Check audio devices before starting
+        # Check audio devices
         try:
             device_info = sd.query_devices(None, "input")
             if device_info is None:
@@ -309,19 +300,33 @@ if __name__ == '__main__':
             print(f"Error initializing audio: {e}")
             sys.exit(1)
 
-        # Start the recording function in a separate thread
+        # Start recording thread
         recording_thread = threading.Thread(target=record, args=(transcription_queue, control_event))
         recording_thread.start()
 
-        # Run the Kivy application
-        app = TranscriptionApp(transcription_queue, control_event)
-        try:
-            app.run()
-        except Exception as e:
-            print(f"Error in GUI: {e}")
-            control_event.set()  # Signal the recording thread to stop
+        # Start Qt application
+        app = QApplication(sys.argv)
+        
+        # Load Vazir font
+        font_id = QFontDatabase.addApplicationFont("fonts/Vazirmatn-Regular.ttf")
+        if font_id < 0:
+            print("Warning: Could not load Vazir font, falling back to system font")
+            font_family = "Arial"  # Fallback font
+        else:
+            font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
+            print(f"Loaded font family: {font_family}")
 
-        # Wait for the recording thread to finish
+        # Create and setup window
+        window = TranscriptionWindow(transcription_queue, control_event, font_family)
+        
+        # Keep reference to window and app
+        app.window = window  # Prevent garbage collection
+        
+        # Run application
+        sys.exit(app.exec())  # Change this line
+        
+        # Cleanup
+        control_event.set()
         recording_thread.join()
 
     except Exception as e:
