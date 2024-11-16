@@ -45,20 +45,22 @@ class TranscriptionWindow(QWidget):
         
         # Create label for transcription text with RTL support
         self.label = QLabel(self)
-        self.label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center alignment
         self.label.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.label.setTextFormat(Qt.TextFormat.PlainText)
-        self.label.setStyleSheet("""
-            QLabel {
+        self.label.setStyleSheet(f"""
+            QLabel {{
                 color: white;
                 background-color: rgba(0, 0, 0, 150);
-                padding: 10px;
+                padding: 8px 15px;
                 border-radius: 5px;
                 width: 100%;
                 height: 100%;
-                text-align: right;
+                text-align: center;
                 direction: rtl;
-            }
+                font-family: {self.font_family};
+                font-size: 14px;
+            }}
         """)
         
         # Set locale for RTL text
@@ -66,14 +68,16 @@ class TranscriptionWindow(QWidget):
         self.setLocale(locale)
         self.label.setLocale(locale)
         
-        # Use the loaded font
-        font = QFont(self.font_family, 12)
+        # Use the loaded font with explicit weight
+        font = QFont(self.font_family)
+        font.setPointSize(14)
+        font.setWeight(QFont.Weight.Medium)
         self.label.setFont(font)
         
         # Set window size and position
         screen = QApplication.primaryScreen().geometry()
-        window_width = screen.width() // 2
-        window_height = 100
+        window_width = min(screen.width() // 3, 600)  # Smaller width, max 600px
+        window_height = 60  # Reduced height
         
         # Position window at top center
         self.setGeometry(
@@ -314,16 +318,45 @@ if __name__ == '__main__':
         # Start Qt application
         app = QApplication(sys.argv)
         
-        # Load Vazir font
-        font_id = QFontDatabase.addApplicationFont("fonts/Vazirmatn-Regular.ttf")
-        if font_id < 0:
-            print("Warning: Could not load Vazir font, falling back to system font")
-            font_family = "Arial"  # Fallback font
-        else:
-            font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
-            print(f"Loaded font family: {font_family}")
+        # Get script directory and construct font path
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        font_path = os.path.join(script_dir, "fonts", "Vazirmatn-Regular.ttf")
+        
+        print(f"Looking for font at: {font_path}")
+        
+        if not os.path.exists(font_path):
+            print(f"Error: Font file not found at {font_path}")
+            # Try alternative locations
+            alt_paths = [
+                "./fonts/Vazirmatn-Regular.ttf",
+                "../fonts/Vazirmatn-Regular.ttf",
+                os.path.expanduser("~/fonts/Vazirmatn-Regular.ttf")
+            ]
+            
+            for alt_path in alt_paths:
+                if os.path.exists(alt_path):
+                    font_path = alt_path
+                    print(f"Found font at alternative location: {font_path}")
+                    break
+            else:
+                print("Using system font as fallback")
+                font_family = "Arial"
+        
+        if 'font_family' not in locals():  # Only load font if we haven't set a fallback
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            if font_id < 0:
+                print(f"Error: Failed to load font from {font_path}")
+                font_family = "Arial"
+            else:
+                font_families = QFontDatabase.applicationFontFamilies(font_id)
+                if not font_families:
+                    print("Error: No font families found in the font file")
+                    font_family = "Arial"
+                else:
+                    font_family = font_families[0]
+                    print(f"Successfully loaded font family: {font_family}")
 
-        # Create and setup window
+        # Create window with loaded font
         window = TranscriptionWindow(transcription_queue, control_event, font_family)
         
         # Keep reference to window and app
