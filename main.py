@@ -8,6 +8,8 @@ import time
 from datetime import datetime
 import threading
 import pyperclip
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 from kivy.app import App
 from kivy.uix.label import Label
@@ -16,10 +18,13 @@ from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.properties import StringProperty
 from kivy.lang import Builder
-
+from kivy.core.text import LabelBase
 from vosk import Model, KaldiRecognizer
+# Register a font that supports Persian characters
+LabelBase.register(name='Vazir',
+                  fn_regular='fonts/Vazirmatn-Regular.ttf')  # Make sure to place Vazir.ttf in your project directory
 
-# Update the Kivy UI string
+# Update the Kivy UI string with RTL support
 Builder.load_string('''
 <TranscriptionWidget>:
     FloatLayout:
@@ -29,10 +34,22 @@ Builder.load_string('''
             pos_hint: {'center_x': 0.5, 'center_y': 0.5}
             color: 1, 1, 1, 1
             font_size: '16sp'
+            font_name: 'Vazir'
+            text_size: self.size
+            halign: 'right'  # RTL alignment
+            valign: 'middle'
+            shorten: False
+            markup: True
 ''')
 
 class TranscriptionWidget(Widget):
     transcription_text = StringProperty("")
+
+    def process_text(self, text):
+        # Reshape and reorder the text for proper RTL display
+        reshaped_text = arabic_reshaper.reshape(text)
+        bidi_text = get_display(reshaped_text)
+        return bidi_text
 
 class TranscriptionApp(App):
     def __init__(self, transcription_queue, control_event, **kwargs):
@@ -40,7 +57,7 @@ class TranscriptionApp(App):
         self.transcription_queue = transcription_queue
         self.control_event = control_event
         self.widget = None
-        self.window_visible = False  # Add this line
+        self.window_visible = False
         
     def build(self):
         # Create widget first
@@ -50,10 +67,10 @@ class TranscriptionApp(App):
         Window.borderless = True
         Window.always_on_top = True
         
-        # Calculate window size and position
+        # Update window size to accommodate Persian text better
         screen_width = Window.system_size[0]
         window_width = screen_width // 2
-        Window.size = (window_width, 50)
+        Window.size = (window_width, 100)  # Increased height for better visibility
         
         # Position window at top center
         Window.top = 10
@@ -90,7 +107,9 @@ class TranscriptionApp(App):
                     self._hide_window()
                     self.widget.transcription_text = ""
                 elif action == "update":
-                    self.widget.transcription_text = message
+                    # Process the text before displaying
+                    processed_text = self.widget.process_text(message)
+                    self.widget.transcription_text = processed_text
                 elif action == "exit":
                     self._hide_window()
                     self.stop()
@@ -276,13 +295,19 @@ def record(transcription_queue, control_event):
 
 # Main thread code
 if __name__ == '__main__':
-    if os.geteuid() != 0:
-        print("Script is not running as root. Attempting to elevate privileges...")
-        args = ['sudo', sys.executable] + sys.argv
-        os.execvp('sudo', args)
-    else:
+    try:
         transcription_queue = queue.Queue()
         control_event = threading.Event()
+
+        # Check audio devices before starting
+        try:
+            device_info = sd.query_devices(None, "input")
+            if device_info is None:
+                print("Error: No input device found")
+                sys.exit(1)
+        except sd.PortAudioError as e:
+            print(f"Error initializing audio: {e}")
+            sys.exit(1)
 
         # Start the recording function in a separate thread
         recording_thread = threading.Thread(target=record, args=(transcription_queue, control_event))
@@ -290,7 +315,15 @@ if __name__ == '__main__':
 
         # Run the Kivy application
         app = TranscriptionApp(transcription_queue, control_event)
-        app.run()
+        try:
+            app.run()
+        except Exception as e:
+            print(f"Error in GUI: {e}")
+            control_event.set()  # Signal the recording thread to stop
 
         # Wait for the recording thread to finish
         recording_thread.join()
+
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)
