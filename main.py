@@ -1,13 +1,14 @@
 import queue
 import sys
-import json  # Add this import
+import json
 import sounddevice as sd
 from pynput import keyboard
 import os
 import time
 from datetime import datetime
 import tkinter as tk
-import threading  # Import threading module
+import threading
+import pyperclip  # Add this import at the top
 
 from vosk import Model, KaldiRecognizer
 
@@ -82,10 +83,12 @@ def record(transcription_queue, control_event):
                                         full_result.append(json.loads(final).get("text", ""))
                                         transcription = " ".join(filter(None, full_result))
                                         print("Transcription:", transcription)
-                                        # Save transcription to a file
-                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                        with open(f"transcription_{timestamp}.txt", "w") as f:
-                                            f.write(transcription)
+                                        # Copy transcription to clipboard instead of saving to file
+                                        try:
+                                            pyperclip.copy(transcription)
+                                            print("Transcription copied to clipboard!")
+                                        except Exception as e:
+                                            print("Error copying to clipboard:", str(e))
                                         # Send final transcription to the GUI
                                         transcription_queue.put(("update", transcription))
                                 except Exception as e:
