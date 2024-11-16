@@ -15,6 +15,14 @@ from vosk import Model, KaldiRecognizer
 q = queue.Queue()
 MIN_RECORDING_DURATION = 0.5  # Minimum recording duration in seconds
 
+# Define a global variable for accumulated results
+class TranscriptionState:
+    def __init__(self):
+        self.full_result = []
+        self.current_partial = ""
+
+transcription_state = TranscriptionState()
+
 def callback(indata, frames, time, status):
     """This is called (from a separate thread) for each audio block."""
     if status:
@@ -22,7 +30,6 @@ def callback(indata, frames, time, status):
     q.put(bytes(indata))
 
 def record(transcription_queue, control_event):
-    full_result = []  # Move back inside record function but make it accessible to nested functions
     try:
         # Use default device and sample rate
         device_info = sd.query_devices(None, "input")
@@ -49,17 +56,17 @@ def record(transcription_queue, control_event):
             recording_start_time = None
 
             def clear_audio_state():
-                nonlocal rec, audio_data, recording_start_time, full_result
+                nonlocal rec, audio_data, recording_start_time
                 while not q.empty():
                     _ = q.get()  # Clear the queue
                 rec = None
                 audio_data = []
                 recording_start_time = None
-                full_result = []  # Clear full_result when clearing state
+                # Don't clear full_result here anymore
 
             pressed_keys = set()
             def on_press(key):
-                nonlocal recording, break_loop, pressed_keys, rec, audio_data, recording_start_time, full_result
+                nonlocal recording, break_loop, pressed_keys, rec, audio_data, recording_start_time
                 pressed_keys.add(key)
                 try:
                     if (keyboard.Key.ctrl in pressed_keys and
@@ -67,6 +74,9 @@ def record(transcription_queue, control_event):
                         keyboard.KeyCode.from_char('s') in pressed_keys):
                         recording = not recording
                         if recording:
+                            # Only clear full_result when starting a new recording
+                            transcription_state.full_result = []
+                            transcription_state.current_partial = ""
                             clear_audio_state()
                             rec = KaldiRecognizer(model, samplerate)
                             recording_start_time = datetime.now()
@@ -80,8 +90,10 @@ def record(transcription_queue, control_event):
                                 try:
                                     final = rec.FinalResult()
                                     if final:
-                                        full_result.append(json.loads(final).get("text", ""))
-                                        transcription = " ".join(filter(None, full_result))
+                                        final_dict = json.loads(final)
+                                        if final_dict.get("text"):
+                                            transcription_state.full_result.append(final_dict["text"])
+                                        transcription = " ".join(filter(None, transcription_state.full_result))
                                         print("Transcription:", transcription)
                                         # Copy transcription to clipboard instead of saving to file
                                         try:
@@ -127,15 +139,20 @@ def record(transcription_queue, control_event):
                                     if result and len(result) > 2:
                                         result_dict = json.loads(result)
                                         if "text" in result_dict and result_dict["text"]:
-                                            full_result.append(result_dict["text"])
-                                            transcription = " ".join(filter(None, full_result))
+                                            transcription_state.full_result.append(result_dict["text"])
+                                            transcription = " ".join(filter(None, transcription_state.full_result))
+                                            if transcription_state.current_partial:
+                                                transcription += " " + transcription_state.current_partial
                                             transcription_queue.put(("update", transcription))
                                 else:
                                     partial = rec.PartialResult()
                                     if partial and len(partial) > 2:
                                         partial_dict = json.loads(partial)
                                         if "partial" in partial_dict:
-                                            transcription = partial_dict["partial"]
+                                            transcription_state.current_partial = partial_dict["partial"]
+                                            transcription = " ".join(filter(None, transcription_state.full_result))
+                                            if transcription_state.current_partial:
+                                                transcription += " " + transcription_state.current_partial
                                             transcription_queue.put(("update", transcription))
                             
                             if dump_fn is not None:
@@ -148,8 +165,8 @@ def record(transcription_queue, control_event):
                             final_result = rec.FinalResult()
                             final_dict = json.loads(final_result)
                             if "text" in final_dict and final_dict["text"]:
-                                full_result.append(final_dict["text"])
-                                transcription = " ".join(filter(None, full_result))
+                                transcription_state.full_result.append(final_dict["text"])
+                                transcription = " ".join(filter(None, transcription_state.full_result))
                                 print("Transcription:", transcription)
                         except Exception as e:
                             print("Error getting final result:", str(e))
