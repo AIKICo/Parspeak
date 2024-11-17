@@ -18,6 +18,131 @@ from PyQt6.QtWidgets import (
     QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu, QGraphicsDropShadowEffect
 )
 
+class SettingsWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)  # Pass parent to super().__init__
+        self.parent = parent
+        self.selected_device = None
+        self.init_ui()
+        # Set window modality to application modal
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+
+    def init_ui(self):
+        # Set window flags similar to TranscriptionWindow
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool |
+            Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # Create layout
+        from PyQt6.QtWidgets import QVBoxLayout, QComboBox, QHBoxLayout, QPushButton
+        layout = QVBoxLayout()
+        
+        # Create and style the combo box
+        self.device_combo = QComboBox()
+        self.device_combo.setStyleSheet("""
+            QComboBox {
+                color: white;
+                background-color: rgba(60, 60, 60, 180);
+                padding: 8px;
+                border-radius: 5px;
+                border: 1px solid rgba(255, 255, 255, 20);
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+            }
+        """)
+        self.populate_devices()
+        
+        # Create buttons
+        button_layout = QHBoxLayout()
+        apply_button = QPushButton("Apply")
+        close_button = QPushButton("Close")
+        
+        # Style buttons
+        button_style = """
+            QPushButton {
+                color: white;
+                background-color: rgba(60, 60, 60, 180);
+                padding: 8px 15px;
+                border-radius: 5px;
+                border: 1px solid rgba(255, 255, 255, 20);
+            }
+            QPushButton:hover {
+                background-color: rgba(80, 80, 80, 180);
+            }
+        """
+        apply_button.setStyleSheet(button_style)
+        close_button.setStyleSheet(button_style)
+        
+        # Connect buttons
+        apply_button.clicked.connect(self.apply_settings)
+        close_button.clicked.connect(self.close)
+        
+        # Add widgets to layouts
+        button_layout.addWidget(apply_button)
+        button_layout.addWidget(close_button)
+        
+        layout.addWidget(self.device_combo)
+        layout.addLayout(button_layout)
+        
+        # Set window style
+        self.setStyleSheet("""
+            QWidget {
+                background-color: rgba(40, 40, 40, 80);
+                border-radius: 10px;
+            }
+        """)
+        
+        # Add shadow effect
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(15)
+        shadow.setColor(Qt.GlobalColor.black)
+        shadow.setOffset(0, 0)
+        self.setGraphicsEffect(shadow)
+        
+        self.setLayout(layout)
+        
+        # Set size and position
+        self.resize(300, 120)
+        self.center_on_screen()
+
+    def center_on_screen(self):
+        screen = QApplication.primaryScreen().geometry()
+        self.move(
+            (screen.width() - self.width()) // 2,
+            (screen.height() - self.height()) // 2
+        )
+
+    def populate_devices(self):
+        self.device_combo.clear()
+        devices = sd.query_devices()
+        for i, device in enumerate(devices):
+            if device['max_input_channels'] > 0:
+                self.device_combo.addItem(f"{device['name']}", i)
+        
+        # Select current device if set
+        if self.selected_device is not None:
+            index = self.device_combo.findData(self.selected_device)
+            if index >= 0:
+                self.device_combo.setCurrentIndex(index)
+
+    def apply_settings(self):
+        self.selected_device = self.device_combo.currentData()
+        if self.parent:
+            self.parent.selected_device = self.selected_device
+        self.hide()  # Hide instead of close
+
+    def closeEvent(self, event):
+        # Hide instead of close
+        event.ignore()
+        self.hide()
+
 class TranscriptionWindow(QWidget):
     def __init__(self, transcription_queue, control_event, font_family="Arial"):
         super().__init__()
@@ -27,6 +152,9 @@ class TranscriptionWindow(QWidget):
         self.transcription_queue = transcription_queue
         self.control_event = control_event
         self.font_family = font_family
+        self.selected_device = None
+        # Add settings_window instance variable
+        self.settings_window = None
         self.init_ui()
         self.init_tray()
         
@@ -118,6 +246,9 @@ class TranscriptionWindow(QWidget):
         
         # Create tray menu
         tray_menu = QMenu()
+        settings_action = tray_menu.addAction("Settings")
+        settings_action.triggered.connect(self.show_settings)
+        tray_menu.addSeparator()
         quit_action = tray_menu.addAction("Quit")
         quit_action.triggered.connect(self.quit_app)
         
@@ -126,6 +257,14 @@ class TranscriptionWindow(QWidget):
         
         # Connect double click to toggle visibility
         self.tray_icon.activated.connect(self.on_tray_activated)
+
+    def show_settings(self):
+        # Store the settings window instance as a class member
+        self.settings_window = SettingsWindow(self)
+        # Set the selected device if it exists
+        self.settings_window.selected_device = self.selected_device
+        self.settings_window.populate_devices()  # Repopulate with current selection
+        self.settings_window.show()
 
     def set_recording_state(self, is_recording):
         """Update tray icon based on recording state"""
@@ -255,6 +394,10 @@ def record(transcription_queue, control_event):
 
         # Set dump_fn to None
         dump_fn = None
+
+        # Get the window instance from QApplication
+        window = QApplication.instance().window
+        device = window.selected_device if window.selected_device is not None else None
 
         with sd.RawInputStream(samplerate=samplerate, 
                              blocksize=4000,  # Smaller chunks for more frequent updates
