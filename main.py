@@ -2,6 +2,7 @@ import queue
 import sys
 import json
 import sounddevice as sd
+import numpy as np  # Add this import
 from pynput import keyboard
 import os
 import time
@@ -10,12 +11,10 @@ import threading
 import pyperclip
 import arabic_reshaper
 from vosk import Model, KaldiRecognizer
-from bidi.algorithm import get_display
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 from PyQt6.QtCore import Qt, QTimer, QLocale
 from PyQt6.QtGui import QFont, QFontDatabase
 
-# ...existing imports and queue/state definitions...
 
 class TranscriptionWindow(QWidget):
     def __init__(self, transcription_queue, control_event, font_family="Arial"):
@@ -133,6 +132,21 @@ class TranscriptionState:
 
 transcription_state = TranscriptionState()
 
+def audio_preprocessing(audio_data):
+    # Convert bytes to numpy array
+    audio = np.frombuffer(audio_data, dtype=np.int16)
+    
+    # Normalize audio
+    audio = audio.astype(np.float32) / 32768.0
+    
+    # Apply simple noise reduction
+    noise_threshold = 0.005
+    audio[abs(audio) < noise_threshold] = 0
+    
+    # Convert back to int16
+    audio = (audio * 32768).astype(np.int16)
+    return audio.tobytes()
+
 # Keep existing callback function
 def callback(indata, frames, time, status):
     if status:
@@ -142,19 +156,30 @@ def callback(indata, frames, time, status):
 # Keep existing record function unchanged
 def record(transcription_queue, control_event):
     try:
-        # Use default device and sample rate
+        # Use higher sample rate for better quality
         device_info = sd.query_devices(None, "input")
-        samplerate = int(device_info["default_samplerate"])
+        samplerate = 48000  # Increased from default
         device = None
 
-        # Set the default language model to "fa"
-        model = Model(lang="fa")
+        # Update model path to point to the extracted folder
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "vosk-model-small-fa-0.42")
+        if not os.path.exists(model_path):
+            print(f"Error: Model not found at {model_path}")
+            print("Please download the model from https://alphacephei.com/vosk/models")
+            print("Extract it to the 'models' folder in your script directory")
+            sys.exit(1)
+            
+        model = Model(model_path=model_path)
 
         # Set dump_fn to None
         dump_fn = None
 
-        with sd.RawInputStream(samplerate=samplerate, blocksize = 8000, device=device,
-                dtype="int16", channels=1, callback=callback):
+        with sd.RawInputStream(samplerate=samplerate, 
+                             blocksize=16000,  # Increased block size
+                             device=device,
+                             dtype="int16",
+                             channels=1,
+                             callback=callback):
             print("#" * 80)
             print("Press 'Ctrl+Shift+S' to start/stop the recording")
             print("#" * 80)
@@ -241,11 +266,13 @@ def record(transcription_queue, control_event):
                     try:
                         if not q.empty():
                             data = q.get()
-                            audio_data.append(data)  # Store audio data
+                            # Apply preprocessing to improve audio quality
+                            processed_data = audio_preprocessing(data)
+                            audio_data.append(processed_data)
                             
                             # Only process audio after minimum duration
                             if recording_start_time and (datetime.now() - recording_start_time).total_seconds() >= MIN_RECORDING_DURATION:
-                                if rec.AcceptWaveform(data):
+                                if rec.AcceptWaveform(processed_data):
                                     result = rec.Result()
                                     if result and len(result) > 2:
                                         result_dict = json.loads(result)
@@ -267,7 +294,7 @@ def record(transcription_queue, control_event):
                                             transcription_queue.put(("update", transcription))
                             
                             if dump_fn is not None:
-                                dump_fn.write(data)
+                                dump_fn.write(processed_data)
                     except Exception as e:
                         print("Error processing audio frame:", str(e))
                 else:
@@ -369,6 +396,13 @@ if __name__ == '__main__':
         # Cleanup
         control_event.set()
         recording_thread.join()
+
+        # Check if we have the full model
+        model_path = os.path.join(script_dir, "model")
+        if not os.path.exists(model_path):
+            print("Warning: Full model not found. Please download the complete model for better accuracy.")
+            print("Visit https://alphacephei.com/vosk/models and download the Persian model")
+            print("Extract it to a 'model' folder in your script directory")
 
     except Exception as e:
         print(f"Fatal error: {e}")
