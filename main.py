@@ -252,12 +252,6 @@ def record(transcription_queue, control_event):
                                     clear_audio_state()
                             # Signal the main thread to hide the window
                             transcription_queue.put(("hide", None))
-                    elif (keyboard.KeyCode.from_char('q') in pressed_keys):
-                        print("Exiting...")
-                        break_loop = True
-                        # Signal the main thread to close the window
-                        transcription_queue.put(("exit", None))
-                        return False  # Stop the listener
                 except AttributeError:
                     pass
 
