@@ -136,12 +136,19 @@ def audio_preprocessing(audio_data):
     # Convert bytes to numpy array
     audio = np.frombuffer(audio_data, dtype=np.int16)
     
-    # Normalize audio
+    # Convert to float32 for processing
     audio = audio.astype(np.float32) / 32768.0
     
-    # Apply simple noise reduction
-    noise_threshold = 0.005
-    audio[abs(audio) < noise_threshold] = 0
+    # Boost the signal slightly
+    audio = audio * 1.2
+    
+    # Advanced noise gate with smoothing
+    noise_gate = 0.003
+    mask = abs(audio) > noise_gate
+    audio = audio * mask
+    
+    # Clip to prevent distortion
+    audio = np.clip(audio, -1.0, 1.0)
     
     # Convert back to int16
     audio = (audio * 32768).astype(np.int16)
@@ -158,7 +165,7 @@ def record(transcription_queue, control_event):
     try:
         # Use higher sample rate for better quality
         device_info = sd.query_devices(None, "input")
-        samplerate = 48000  # Increased from default
+        samplerate = 16000  # Optimal rate for Vosk small model
         device = None
 
         # Update model path to point to the extracted folder
@@ -175,7 +182,7 @@ def record(transcription_queue, control_event):
         dump_fn = None
 
         with sd.RawInputStream(samplerate=samplerate, 
-                             blocksize=16000,  # Increased block size
+                             blocksize=4000,  # Smaller chunks for more frequent updates
                              device=device,
                              dtype="int16",
                              channels=1,
@@ -266,13 +273,15 @@ def record(transcription_queue, control_event):
                     try:
                         if not q.empty():
                             data = q.get()
-                            # Apply preprocessing to improve audio quality
                             processed_data = audio_preprocessing(data)
+                            
+                            # Accumulate small chunks before processing
                             audio_data.append(processed_data)
                             
-                            # Only process audio after minimum duration
-                            if recording_start_time and (datetime.now() - recording_start_time).total_seconds() >= MIN_RECORDING_DURATION:
-                                if rec.AcceptWaveform(processed_data):
+                            # Process in larger chunks for better accuracy
+                            if len(audio_data) >= 4:  # Process every 4 chunks
+                                combined_data = b''.join(audio_data)
+                                if rec.AcceptWaveform(combined_data):
                                     result = rec.Result()
                                     if result and len(result) > 2:
                                         result_dict = json.loads(result)
@@ -282,16 +291,19 @@ def record(transcription_queue, control_event):
                                             if transcription_state.current_partial:
                                                 transcription += " " + transcription_state.current_partial
                                             transcription_queue.put(("update", transcription))
-                                else:
-                                    partial = rec.PartialResult()
-                                    if partial and len(partial) > 2:
-                                        partial_dict = json.loads(partial)
-                                        if "partial" in partial_dict:
-                                            transcription_state.current_partial = partial_dict["partial"]
-                                            transcription = " ".join(filter(None, transcription_state.full_result))
-                                            if transcription_state.current_partial:
-                                                transcription += " " + transcription_state.current_partial
-                                            transcription_queue.put(("update", transcription))
+                                audio_data = []  # Clear processed chunks
+                            
+                            # Only show partial results after minimum duration
+                            elif recording_start_time and (datetime.now() - recording_start_time).total_seconds() >= MIN_RECORDING_DURATION:
+                                partial = rec.PartialResult()
+                                if partial and len(partial) > 2:
+                                    partial_dict = json.loads(partial)
+                                    if "partial" in partial_dict:
+                                        transcription_state.current_partial = partial_dict["partial"]
+                                        transcription = " ".join(filter(None, transcription_state.full_result))
+                                        if transcription_state.current_partial:
+                                            transcription += " " + transcription_state.current_partial
+                                        transcription_queue.put(("update", transcription))
                             
                             if dump_fn is not None:
                                 dump_fn.write(processed_data)
