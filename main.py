@@ -11,7 +11,7 @@ import threading
 import pyperclip
 import arabic_reshaper
 from vosk import Model, KaldiRecognizer
-from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu
+from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu, QGraphicsBlurEffect, QGraphicsDropShadowEffect
 from PyQt6.QtCore import Qt, QTimer, QLocale
 from PyQt6.QtGui import QFont, QFontDatabase, QIcon
 
@@ -52,7 +52,14 @@ class TranscriptionWindow(QWidget):
         self.label = QLabel(self)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Update stylesheet to include rounded corners for both window and label
+        # Remove the blur effect and just keep the shadow
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(15)
+        shadow.setColor(Qt.GlobalColor.black)
+        shadow.setOffset(0, 0)
+        self.label.setGraphicsEffect(shadow)
+        
+        # Update stylesheet for frosted glass effect
         self.setStyleSheet("""
             QWidget {
                 border-radius: 10px;
@@ -60,11 +67,11 @@ class TranscriptionWindow(QWidget):
             }
         """)
         
-        # Updated label stylesheet
+        # Updated label stylesheet with better blur simulation
         self.label.setStyleSheet(f"""
             QLabel {{
                 color: white;
-                background-color: rgba(0, 0, 0, 80);
+                background-color: rgba(40, 40, 40, 80);
                 padding: 8px 15px;
                 border-radius: 10px;
                 width: 100%;
@@ -73,6 +80,8 @@ class TranscriptionWindow(QWidget):
                 qproperty-alignment: AlignCenter;
                 font-family: {self.font_family};
                 font-size: 14px;
+                border: 1px solid rgba(255, 255, 255, 20);
+                box-shadow: 0 0 10px rgba(0, 0, 0, 50);
             }}
         """)
         
