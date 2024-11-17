@@ -20,19 +20,20 @@ from PyQt6.QtWidgets import (
 
 class SettingsWindow(QWidget):
     def __init__(self, parent=None):
-        super().__init__(parent)  # Pass parent to super().__init__
+        super().__init__(parent)
         self.parent = parent
         self.selected_device = None
+        # Replace the window modality setting
+        self.setWindowModality(Qt.WindowModality.NonModal)
         self.init_ui()
-        # Set window modality to application modal
-        self.setWindowModality(Qt.WindowModality.ApplicationModal)
 
     def init_ui(self):
-        # Set window flags similar to TranscriptionWindow
+        # Update window flags to stay on top without disturbing other windows
         self.setWindowFlags(
+            Qt.WindowType.Window |
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.Tool |
-            Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
