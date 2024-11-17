@@ -1,22 +1,22 @@
-import queue
-import sys
-import json
-import sounddevice as sd
-import numpy as np  # Add this import
-from pynput import keyboard
 import os
+import sys
 import time
-from datetime import datetime
+import queue
+import json
 import threading
+from datetime import datetime
+
+import numpy as np
+import sounddevice as sd
 import pyperclip
 import arabic_reshaper
 from vosk import Model, KaldiRecognizer
-from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu, QGraphicsBlurEffect, QGraphicsDropShadowEffect
+from pynput import keyboard
 from PyQt6.QtCore import Qt, QTimer, QLocale
 from PyQt6.QtGui import QFont, QFontDatabase, QIcon
-
-# Add at the top with other globals
-listener = None  # Global keyboard listener reference
+from PyQt6.QtWidgets import (
+    QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu, QGraphicsDropShadowEffect
+)
 
 class TranscriptionWindow(QWidget):
     def __init__(self, transcription_queue, control_event, font_family="Arial"):
@@ -334,7 +334,6 @@ def record(transcription_queue, control_event):
                 if key in pressed_keys:
                     pressed_keys.remove(key)
 
-            global listener
             listener = keyboard.Listener(on_press=on_press, on_release=on_release)
             listener.start()  # Start the listener outside the loop
 
