@@ -15,7 +15,7 @@ from pynput import keyboard
 from PyQt6.QtCore import Qt, QTimer, QLocale
 from PyQt6.QtGui import QFont, QFontDatabase, QIcon
 from PyQt6.QtWidgets import (
-    QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu, QGraphicsDropShadowEffect
+    QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu, QGraphicsDropShadowEffect, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton
 )
 
 class SettingsWindow(QWidget):
@@ -29,12 +29,12 @@ class SettingsWindow(QWidget):
 
     def init_ui(self):
         # Common styles
-        BACKGROUND_COLOR = "rgba(40, 40, 40, 200)"  # More opaque for settings
+        BACKGROUND_COLOR = "rgba(40, 40, 40, 200)"
         ELEMENT_BACKGROUND = "rgba(60, 60, 60, 180)"
         BORDER_COLOR = "rgba(255, 255, 255, 20)"
         TEXT_COLOR = "white"
 
-        # Update window flags
+        # Update window flags and attributes
         self.setWindowFlags(
             Qt.WindowType.Window |
             Qt.WindowType.FramelessWindowHint |
@@ -43,9 +43,23 @@ class SettingsWindow(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
-        # Create layout
-        from PyQt6.QtWidgets import QVBoxLayout, QComboBox, QHBoxLayout, QPushButton
-        layout = QVBoxLayout()
+        # Create main layout for the window
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create background container widget
+        self.container = QWidget()
+        self.container.setStyleSheet(f"""
+            QWidget {{
+                background-color: {BACKGROUND_COLOR};
+                border-radius: 10px;
+                border: 1px solid {BORDER_COLOR};
+            }}
+        """)
+        
+        # Create layout for container
+        container_layout = QVBoxLayout(self.container)
+        container_layout.setContentsMargins(15, 15, 15, 15)
         
         # Create and style the combo box
         self.device_combo = QComboBox()
@@ -72,7 +86,7 @@ class SettingsWindow(QWidget):
         """)
         self.populate_devices()
         
-        # Create buttons with consistent styling
+        # Create button layout and buttons
         button_layout = QHBoxLayout()
         apply_button = QPushButton("Apply")
         close_button = QPushButton("Close")
@@ -96,33 +110,25 @@ class SettingsWindow(QWidget):
         apply_button.clicked.connect(self.apply_settings)
         close_button.clicked.connect(self.close)
         
-        # Add widgets to layouts
+        # Add buttons to button layout
         button_layout.addWidget(apply_button)
         button_layout.addWidget(close_button)
         
-        layout.addWidget(self.device_combo)
-        layout.addLayout(button_layout)
+        # Add widgets to container layout
+        container_layout.addWidget(self.device_combo)
+        container_layout.addLayout(button_layout)
         
-        # Main window style with proper background
-        self.setStyleSheet(f"""
-            QWidget {{
-                background-color: {BACKGROUND_COLOR};
-                border-radius: 10px;
-                border: 1px solid {BORDER_COLOR};
-            }}
-        """)
+        # Add container to main layout
+        main_layout.addWidget(self.container)
         
-        # Add shadow effect
+        # Add shadow effect to container
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(15)
         shadow.setColor(Qt.GlobalColor.black)
         shadow.setOffset(0, 0)
-        self.setGraphicsEffect(shadow)
+        self.container.setGraphicsEffect(shadow)
         
-        self.setLayout(layout)
-        layout.setContentsMargins(15, 15, 15, 15)  # Add some padding
-        
-        # Set size and position
+        # Set window size
         self.resize(300, 120)
         self.center_on_screen()
 
