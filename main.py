@@ -51,15 +51,22 @@ class TranscriptionWindow(QWidget):
         # Create label for transcription text
         self.label = QLabel(self)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # Remove setLayoutDirection as we'll handle RTL in CSS
         
-        # Updated stylesheet with correct RTL handling
+        # Update stylesheet to include rounded corners for both window and label
+        self.setStyleSheet("""
+            QWidget {
+                border-radius: 10px;
+                background-color: transparent;
+            }
+        """)
+        
+        # Updated label stylesheet
         self.label.setStyleSheet(f"""
             QLabel {{
                 color: white;
-                background-color: rgba(0, 0, 0, 150);
+                background-color: rgba(0, 0, 0, 80);
                 padding: 8px 15px;
-                border-radius: 5px;
+                border-radius: 10px;
                 width: 100%;
                 height: 100%;
                 text-align: center;
