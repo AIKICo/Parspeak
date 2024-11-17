@@ -21,6 +21,9 @@ listener = None  # Global keyboard listener reference
 class TranscriptionWindow(QWidget):
     def __init__(self, transcription_queue, control_event, font_family="Arial"):
         super().__init__()
+        # Add icon paths
+        self.icon_default = "icon.png"
+        self.icon_recording = "icon_rec.png"
         self.transcription_queue = transcription_queue
         self.control_event = control_event
         self.font_family = font_family
@@ -96,7 +99,7 @@ class TranscriptionWindow(QWidget):
     def init_tray(self):
         # Create system tray icon
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(QIcon("icon.png"))
+        self.tray_icon.setIcon(QIcon(self.icon_default))
         
         # Create tray menu
         tray_menu = QMenu()
@@ -108,6 +111,11 @@ class TranscriptionWindow(QWidget):
         
         # Connect double click to toggle visibility
         self.tray_icon.activated.connect(self.on_tray_activated)
+
+    def set_recording_state(self, is_recording):
+        """Update tray icon based on recording state"""
+        icon_path = self.icon_recording if is_recording else self.icon_default
+        self.tray_icon.setIcon(QIcon(icon_path))
 
     def toggle_visibility(self):
         if self.isVisible():
@@ -155,9 +163,11 @@ class TranscriptionWindow(QWidget):
                 action, message = self.transcription_queue.get_nowait()
                 if action == "show":
                     self.show()
+                    self.set_recording_state(True)
                 elif action == "hide":
                     self.hide()
                     self.label.setText("")
+                    self.set_recording_state(False)
                 elif action == "update":
                     processed_text = self.process_text(message)
                     self.label.setText(processed_text)
