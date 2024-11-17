@@ -28,7 +28,13 @@ class SettingsWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # Update window flags to stay on top without disturbing other windows
+        # Common styles
+        BACKGROUND_COLOR = "rgba(40, 40, 40, 200)"  # More opaque for settings
+        ELEMENT_BACKGROUND = "rgba(60, 60, 60, 180)"
+        BORDER_COLOR = "rgba(255, 255, 255, 20)"
+        TEXT_COLOR = "white"
+
+        # Update window flags
         self.setWindowFlags(
             Qt.WindowType.Window |
             Qt.WindowType.FramelessWindowHint |
@@ -43,40 +49,45 @@ class SettingsWindow(QWidget):
         
         # Create and style the combo box
         self.device_combo = QComboBox()
-        self.device_combo.setStyleSheet("""
-            QComboBox {
-                color: white;
-                background-color: rgba(60, 60, 60, 180);
+        self.device_combo.setStyleSheet(f"""
+            QComboBox {{
+                color: {TEXT_COLOR};
+                background-color: {ELEMENT_BACKGROUND};
                 padding: 8px;
                 border-radius: 5px;
-                border: 1px solid rgba(255, 255, 255, 20);
-            }
-            QComboBox::drop-down {
+                border: 1px solid {BORDER_COLOR};
+            }}
+            QComboBox::drop-down {{
                 border: none;
-            }
-            QComboBox::down-arrow {
+            }}
+            QComboBox::down-arrow {{
                 image: none;
-            }
+            }}
+            QComboBox QAbstractItemView {{
+                color: {TEXT_COLOR};
+                background-color: {BACKGROUND_COLOR};
+                selection-background-color: {ELEMENT_BACKGROUND};
+                border: 1px solid {BORDER_COLOR};
+            }}
         """)
         self.populate_devices()
         
-        # Create buttons
+        # Create buttons with consistent styling
         button_layout = QHBoxLayout()
         apply_button = QPushButton("Apply")
         close_button = QPushButton("Close")
         
-        # Style buttons
-        button_style = """
-            QPushButton {
-                color: white;
-                background-color: rgba(60, 60, 60, 180);
+        button_style = f"""
+            QPushButton {{
+                color: {TEXT_COLOR};
+                background-color: {ELEMENT_BACKGROUND};
                 padding: 8px 15px;
                 border-radius: 5px;
-                border: 1px solid rgba(255, 255, 255, 20);
-            }
-            QPushButton:hover {
+                border: 1px solid {BORDER_COLOR};
+            }}
+            QPushButton:hover {{
                 background-color: rgba(80, 80, 80, 180);
-            }
+            }}
         """
         apply_button.setStyleSheet(button_style)
         close_button.setStyleSheet(button_style)
@@ -92,12 +103,13 @@ class SettingsWindow(QWidget):
         layout.addWidget(self.device_combo)
         layout.addLayout(button_layout)
         
-        # Set window style
-        self.setStyleSheet("""
-            QWidget {
-                background-color: rgba(40, 40, 40, 80);
+        # Main window style with proper background
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {BACKGROUND_COLOR};
                 border-radius: 10px;
-            }
+                border: 1px solid {BORDER_COLOR};
+            }}
         """)
         
         # Add shadow effect
@@ -108,6 +120,7 @@ class SettingsWindow(QWidget):
         self.setGraphicsEffect(shadow)
         
         self.setLayout(layout)
+        layout.setContentsMargins(15, 15, 15, 15)  # Add some padding
         
         # Set size and position
         self.resize(300, 120)
