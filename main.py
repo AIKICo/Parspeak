@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QSystemTrayIcon, QMen
 from PyQt6.QtCore import Qt, QTimer, QLocale
 from PyQt6.QtGui import QFont, QFontDatabase, QIcon
 
+# Add at the top with other globals
+listener = None  # Global keyboard listener reference
 
 class TranscriptionWindow(QWidget):
     def __init__(self, transcription_queue, control_event, font_family="Arial"):
@@ -118,8 +120,20 @@ class TranscriptionWindow(QWidget):
             self.toggle_visibility()
 
     def quit_app(self):
+        global listener
+        # Stop keyboard listener
+        if listener:
+            listener.stop()
+        # Hide tray icon before quitting
+        self.tray_icon.hide()
+        # Signal the recording thread to stop
         self.control_event.set()
+        # Give the thread a moment to clean up
+        time.sleep(0.1)
+        # Quit the application
         QApplication.quit()
+        # Force exit to ensure all threads are stopped
+        sys.exit(0)
 
     def closeEvent(self, event):
         # Override close event to minimize to tray instead of closing
@@ -295,10 +309,11 @@ def record(transcription_queue, control_event):
                 if key in pressed_keys:
                     pressed_keys.remove(key)
 
+            global listener
             listener = keyboard.Listener(on_press=on_press, on_release=on_release)
             listener.start()  # Start the listener outside the loop
 
-            while not break_loop:
+            while not control_event.is_set():  # Change break_loop to use control_event
                 if recording and rec is not None:  # Ensure rec exists
                     try:
                         if not q.empty():
