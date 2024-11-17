@@ -260,12 +260,22 @@ class TranscriptionWindow(QWidget):
         self.tray_icon.activated.connect(self.on_tray_activated)
 
     def show_settings(self):
-        # Store the settings window instance as a class member
-        self.settings_window = SettingsWindow(self)
+        # If settings window already exists, show and activate it
+        if self.settings_window and self.settings_window.isVisible():
+            self.settings_window.raise_()
+            self.settings_window.activateWindow()
+            return
+
+        # Create new settings window only if it doesn't exist
+        if not self.settings_window:
+            self.settings_window = SettingsWindow(self)
+        
         # Set the selected device if it exists
         self.settings_window.selected_device = self.selected_device
         self.settings_window.populate_devices()  # Repopulate with current selection
         self.settings_window.show()
+        self.settings_window.raise_()
+        self.settings_window.activateWindow()
 
     def set_recording_state(self, is_recording):
         """Update tray icon based on recording state"""
