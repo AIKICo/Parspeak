@@ -11,9 +11,9 @@ import threading
 import pyperclip
 import arabic_reshaper
 from vosk import Model, KaldiRecognizer
-from PyQt6.QtWidgets import QApplication, QLabel, QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu
 from PyQt6.QtCore import Qt, QTimer, QLocale
-from PyQt6.QtGui import QFont, QFontDatabase
+from PyQt6.QtGui import QFont, QFontDatabase, QIcon
 
 
 class TranscriptionWindow(QWidget):
@@ -23,6 +23,7 @@ class TranscriptionWindow(QWidget):
         self.control_event = control_event
         self.font_family = font_family
         self.init_ui()
+        self.init_tray()
         
         # Setup timer for queue processing
         self.timer = QTimer()
@@ -89,6 +90,41 @@ class TranscriptionWindow(QWidget):
         
         # Make label fill the entire window
         self.label.setGeometry(0, 0, window_width, window_height)
+
+    def init_tray(self):
+        # Create system tray icon
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(QIcon("icon.png"))
+        
+        # Create tray menu
+        tray_menu = QMenu()
+        quit_action = tray_menu.addAction("Quit")
+        quit_action.triggered.connect(self.quit_app)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+        
+        # Connect double click to toggle visibility
+        self.tray_icon.activated.connect(self.on_tray_activated)
+
+    def toggle_visibility(self):
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+
+    def on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.toggle_visibility()
+
+    def quit_app(self):
+        self.control_event.set()
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        # Override close event to minimize to tray instead of closing
+        event.ignore()
+        self.hide()
 
     def show(self):
         super().show()
@@ -368,7 +404,7 @@ if __name__ == '__main__':
             ]
             
             for alt_path in alt_paths:
-                if os.path.exists(alt_path):
+                if (os.path.exists(alt_path)):
                     font_path = alt_path
                     print(f"Found font at alternative location: {font_path}")
                     break
