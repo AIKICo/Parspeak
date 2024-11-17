@@ -81,7 +81,6 @@ class TranscriptionWindow(QWidget):
                 font-family: {self.font_family};
                 font-size: 14px;
                 border: 1px solid rgba(255, 255, 255, 20);
-                box-shadow: 0 0 10px rgba(0, 0, 0, 50);
             }}
         """)
         
