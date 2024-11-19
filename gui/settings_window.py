@@ -13,6 +13,7 @@ class SettingsWindow(QWidget):
         self.selected_device = None
         self.current_hotkey = set()  # Store current hotkey combination
         self.is_listening_for_hotkey = False
+        self.transcription_state = None  # Will be set by TranscriptionWindow
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.init_ui()
 
@@ -216,10 +217,10 @@ class SettingsWindow(QWidget):
     def _convert_qt_key(self, event: QKeyEvent) -> str:
         # Map Qt keys to string representations
         key_map = {
-            Qt.Key.Key_Control: "Key.ctrl",
-            Qt.Key.Key_Shift: "Key.shift",
-            Qt.Key.Key_Alt: "Key.alt",
-            Qt.Key.Key_Meta: "Key.cmd",
+            Qt.Key.Key_Control: "key.ctrl",  # Changed from "Key.ctrl" to "key.ctrl"
+            Qt.Key.Key_Shift: "key.shift",   # Changed from "Key.shift" to "key.shift"
+            Qt.Key.Key_Alt: "key.alt",       # Changed from "Key.alt" to "key.alt"
+            Qt.Key.Key_Meta: "key.cmd",      # Changed from "Key.cmd" to "key.cmd"
         }
 
         # Handle modifier keys
@@ -239,10 +240,10 @@ class SettingsWindow(QWidget):
         
         # Convert internal key names to display names
         key_map = {
-            "Key.ctrl": "Ctrl",
-            "Key.shift": "Shift",
-            "Key.alt": "Alt",
-            "Key.cmd": "Super"
+            "key.ctrl": "Ctrl",    # Changed from "Key.ctrl" to "key.ctrl"
+            "key.shift": "Shift",  # Changed from "Key.shift" to "key.shift"
+            "key.alt": "Alt",      # Changed from "Key.alt" to "key.alt"
+            "key.cmd": "Super"     # Changed from "Key.cmd" to "key.cmd"
         }
         
         display_keys = []
@@ -257,7 +258,9 @@ class SettingsWindow(QWidget):
         if self.parent:
             self.parent.selected_device = self.selected_device
             if self.current_hotkey:
-                self.parent.update_hotkey(self.current_hotkey)
+                # Update the TranscriptionState directly
+                if self.transcription_state:
+                    self.transcription_state.update_hotkey(self.current_hotkey)
         self.hide()  # Hide instead of close
 
     def closeEvent(self, event):

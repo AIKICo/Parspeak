@@ -27,8 +27,8 @@ class TranscriptionState:
     def __init__(self):
         self.full_result = []
         self.current_partial = ""
-        # Change default hotkey format to be consistent
-        self.hotkey_combination = {'ctrl', 'shift', 's'}
+        # Use consistent key format
+        self.hotkey_combination = {'key.ctrl', 'key.shift', 's'}
 
     def update_hotkey(self, new_combination):
         # Convert combination to lowercase set for consistent comparison
@@ -40,11 +40,11 @@ def normalize_key(key):
         # Handle special keys
         if hasattr(key, 'char'):
             if key.char == '\x03':
-                return 'ctrl'
+                return 'key.ctrl'
             return key.char.lower()
         # Handle modifier and special keys
         if hasattr(key, 'name'):
-            return key.name.lower()
+            return f'key.{key.name.lower()}'  # Add 'key.' prefix for special keys
         # Handle normal character keys
         return str(key).lower()
     except AttributeError:
@@ -331,6 +331,7 @@ if __name__ == '__main__':
 
         # Create window with loaded font
         window = TranscriptionWindow(transcription_queue, control_event, font_family)
+        window.transcription_state = transcription_state  # Add this line to pass the reference
         
         # Keep reference to window and app
         app.window = window  # Prevent garbage collection

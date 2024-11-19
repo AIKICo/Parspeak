@@ -22,6 +22,8 @@ class TranscriptionWindow(QWidget):
         self.selected_device = None
         # Add settings_window instance variable
         self.settings_window = None
+        # Add transcription_state property
+        self.transcription_state = None  # Will be set by main.py
         self.init_ui()
         self.init_tray()
         
@@ -135,6 +137,8 @@ class TranscriptionWindow(QWidget):
         # Create new settings window only if it doesn't exist
         if not self.settings_window:
             self.settings_window = SettingsWindow(self)
+            # Pass the transcription state reference
+            self.settings_window.transcription_state = self.transcription_state
         
         # Set the selected device if it exists
         self.settings_window.selected_device = self.selected_device
