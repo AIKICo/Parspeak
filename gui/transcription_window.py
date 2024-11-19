@@ -7,6 +7,7 @@ from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtWidgets import (
     QApplication, QLabel, QWidget, QSystemTrayIcon, QMenu, QGraphicsDropShadowEffect, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton
 )
+import pyperclip
 from .settings_window import SettingsWindow
 
 class TranscriptionWindow(QWidget):
@@ -199,8 +200,15 @@ class TranscriptionWindow(QWidget):
                     self.label.setText(processed_text)
                     if not self.isVisible():
                         self.show()
+                elif action == "copy":
+                    # Copy text to clipboard in GUI thread
+                    try:
+                        pyperclip.copy(message)
+                        print("Transcription copied to clipboard!")
+                    except Exception as e:
+                        print("Error copying to clipboard:", str(e))
                 elif action == "exit":
-                    self.close()  # Change this line
+                    self.close()
                     QApplication.quit()
                 self.transcription_queue.task_done()
         except queue.Empty:

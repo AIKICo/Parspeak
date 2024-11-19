@@ -161,26 +161,28 @@ def record(transcription_queue, control_event):
                             transcription_queue.put(("show", None))
                         else:
                             print("Recording stopped...")
-                            if rec is not None:  # Check if rec exists
-                                time.sleep(0.1)  # Small delay before processing
+                            current_rec = rec  # Store current recognizer
+                            if current_rec is not None:  # Check if rec exists
+                                time.sleep(0.2)  # Slightly longer delay before processing
                                 try:
-                                    final = rec.FinalResult()
-                                    if final:
-                                        final_dict = json.loads(final)
-                                        if final_dict.get("text"):
-                                            transcription_state.full_result.append(final_dict["text"])
-                                        transcription = " ".join(filter(None, transcription_state.full_result))
+                                    # Process any remaining audio in the queue
+                                    while not q.empty():
+                                        data = q.get()
+                                        current_rec.AcceptWaveform(data)
+                                    
+                                    final = current_rec.FinalResult()
+                                    final_dict = json.loads(final)
+                                    if final_dict.get("text"):
+                                        transcription_state.full_result.append(final_dict["text"])
+                                    transcription = " ".join(filter(None, transcription_state.full_result))
+                                    if transcription:  # Only process if we have text
                                         print("Transcription:", transcription)
-                                        # Copy transcription to clipboard instead of saving to file
-                                        try:
-                                            pyperclip.copy(transcription)
-                                            print("Transcription copied to clipboard!")
-                                        except Exception as e:
-                                            print("Error copying to clipboard:", str(e))
+                                        # Send transcription to GUI thread for clipboard operation
+                                        transcription_queue.put(("copy", transcription))
                                         # Send final transcription to the GUI
                                         transcription_queue.put(("update", transcription))
                                 except Exception as e:
-                                    print("Error processing audio:", str(e))
+                                    print("Error processing final audio:", str(e))
                                 finally:
                                     clear_audio_state()
                             # Signal the main thread to hide the window
