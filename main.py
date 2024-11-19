@@ -27,16 +27,36 @@ class TranscriptionState:
     def __init__(self):
         self.full_result = []
         self.current_partial = ""
-        self.hotkey_combination = {'\\x03', 'Key.shift', 's'}  # Default Ctrl+Shift+S
+        # Change default hotkey format to be consistent
+        self.hotkey_combination = {'ctrl', 'shift', 's'}
 
     def update_hotkey(self, new_combination):
-        self.hotkey_combination = set(new_combination)
+        # Convert combination to lowercase set for consistent comparison
+        self.hotkey_combination = {k.lower() for k in new_combination}
+
+def normalize_key(key):
+    """Convert key to standardized string format"""
+    try:
+        # Handle special keys
+        if hasattr(key, 'char'):
+            if key.char == '\x03':
+                return 'ctrl'
+            return key.char.lower()
+        # Handle modifier and special keys
+        if hasattr(key, 'name'):
+            return key.name.lower()
+        # Handle normal character keys
+        return str(key).lower()
+    except AttributeError:
+        return str(key).lower()
 
 transcription_state = TranscriptionState()
 
 def check_hotkey_match(pressed_keys, target_combination):
-    # Convert all keys to strings for comparison
-    pressed_str = {str(k) for k in pressed_keys}
+    # Normalize all pressed keys
+    pressed_str = {normalize_key(k) for k in pressed_keys}
+    print(f"Pressed keys: {pressed_str}")  # Debug print
+    print(f"Target combination: {target_combination}")  # Debug print
     return pressed_str == target_combination
 
 def audio_preprocessing(audio_data):
@@ -121,9 +141,13 @@ def record(transcription_queue, control_event):
             pressed_keys = set()
             def on_press(key):
                 nonlocal recording, break_loop, pressed_keys, rec, audio_data, recording_start_time
+                key_str = normalize_key(key)
+                print(f"Key pressed: {key_str}")  # Debug print
                 pressed_keys.add(key)
+                
                 try:
                     if check_hotkey_match(pressed_keys, transcription_state.hotkey_combination):
+                        print("Hotkey match detected!")  # Debug print
                         recording = not recording
                         if recording:
                             # Only clear full_result when starting a new recording
