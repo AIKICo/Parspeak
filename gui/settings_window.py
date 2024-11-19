@@ -1,7 +1,9 @@
 import sounddevice as sd
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QGraphicsDropShadowEffect, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton
+    QApplication, QWidget, QGraphicsDropShadowEffect, QVBoxLayout, QComboBox, 
+    QHBoxLayout, QPushButton, QLabel, QFrame
 )
 
 class SettingsWindow(QWidget):
@@ -9,7 +11,8 @@ class SettingsWindow(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.selected_device = None
-        # Replace the window modality setting
+        self.current_hotkey = set()  # Store current hotkey combination
+        self.is_listening_for_hotkey = False
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.init_ui()
 
@@ -46,8 +49,10 @@ class SettingsWindow(QWidget):
         # Create layout for container
         container_layout = QVBoxLayout(self.container)
         container_layout.setContentsMargins(15, 15, 15, 15)
-        
-        # Create and style the combo box
+
+        # Device selection section
+        device_label = QLabel("Input Device:")
+        device_label.setStyleSheet(f"color: white;")
         self.device_combo = QComboBox()
         self.device_combo.setStyleSheet(f"""
             QComboBox {{
@@ -71,8 +76,42 @@ class SettingsWindow(QWidget):
             }}
         """)
         self.populate_devices()
+
+        # Hotkey section
+        hotkey_label = QLabel("Recording Hotkey:")
+        hotkey_label.setStyleSheet(f"color: white;")
         
-        # Create button layout and buttons
+        hotkey_layout = QHBoxLayout()
+        self.hotkey_display = QLabel("Ctrl+Shift+S")
+        self.hotkey_display.setStyleSheet("""
+            QLabel {
+                color: white;
+                background-color: rgba(60, 60, 60, 180);
+                padding: 8px;
+                border-radius: 5px;
+                border: 1px solid rgba(255, 255, 255, 20);
+            }
+        """)
+        
+        self.hotkey_button = QPushButton("Set Hotkey")
+        self.hotkey_button.setStyleSheet("""
+            QPushButton {
+                color: white;
+                background-color: rgba(60, 60, 60, 180);
+                padding: 8px 15px;
+                border-radius: 5px;
+                border: 1px solid rgba(255, 255, 255, 20);
+            }
+            QPushButton:hover {
+                background-color: rgba(80, 80, 80, 180);
+            }
+        """)
+        self.hotkey_button.clicked.connect(self.start_listening_for_hotkey)
+        
+        hotkey_layout.addWidget(self.hotkey_display)
+        hotkey_layout.addWidget(self.hotkey_button)
+
+        # Button layout
         button_layout = QHBoxLayout()
         apply_button = QPushButton("Apply")
         close_button = QPushButton("Close")
@@ -101,7 +140,12 @@ class SettingsWindow(QWidget):
         button_layout.addWidget(close_button)
         
         # Add widgets to container layout
+        container_layout.addWidget(device_label)
         container_layout.addWidget(self.device_combo)
+        container_layout.addSpacing(10)
+        container_layout.addWidget(hotkey_label)
+        container_layout.addLayout(hotkey_layout)
+        container_layout.addSpacing(10)
         container_layout.addLayout(button_layout)
         
         # Add container to main layout
@@ -115,7 +159,7 @@ class SettingsWindow(QWidget):
         self.container.setGraphicsEffect(shadow)
         
         # Set window size
-        self.resize(300, 120)
+        self.resize(300, 200)
         self.center_on_screen()
 
     def center_on_screen(self):
@@ -138,10 +182,82 @@ class SettingsWindow(QWidget):
             if index >= 0:
                 self.device_combo.setCurrentIndex(index)
 
+    def start_listening_for_hotkey(self):
+        if self.is_listening_for_hotkey:
+            self.stop_listening_for_hotkey()
+            return
+
+        self.is_listening_for_hotkey = True
+        self.hotkey_button.setText("Press keys... (ESC to cancel)")
+        self.current_hotkey.clear()
+        self.setFocus()  # Ensure window can receive key events
+        self.grabKeyboard()  # Grab keyboard focus
+
+    def stop_listening_for_hotkey(self):
+        self.is_listening_for_hotkey = False
+        self.hotkey_button.setText("Set Hotkey")
+        self.releaseKeyboard()  # Release keyboard focus
+        self.update_hotkey_display()
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if not self.is_listening_for_hotkey:
+            return super().keyPressEvent(event)
+
+        if event.key() == Qt.Key.Key_Escape:
+            self.stop_listening_for_hotkey()
+            return
+
+        # Convert Qt key to string representation
+        key = self._convert_qt_key(event)
+        if key:
+            self.current_hotkey.add(key)
+            self.update_hotkey_display()
+
+    def _convert_qt_key(self, event: QKeyEvent) -> str:
+        # Map Qt keys to string representations
+        key_map = {
+            Qt.Key.Key_Control: "Key.ctrl",
+            Qt.Key.Key_Shift: "Key.shift",
+            Qt.Key.Key_Alt: "Key.alt",
+            Qt.Key.Key_Meta: "Key.cmd",
+        }
+
+        # Handle modifier keys
+        if event.key() in key_map:
+            return key_map[event.key()]
+
+        # Handle regular keys
+        key_text = event.text()
+        if key_text:
+            return key_text.lower()
+
+        return None
+
+    def update_hotkey_display(self):
+        if not self.current_hotkey:
+            return
+        
+        # Convert internal key names to display names
+        key_map = {
+            "Key.ctrl": "Ctrl",
+            "Key.shift": "Shift",
+            "Key.alt": "Alt",
+            "Key.cmd": "Super"
+        }
+        
+        display_keys = []
+        for key in sorted(self.current_hotkey):
+            display_key = key_map.get(str(key), str(key))
+            display_keys.append(display_key)
+        
+        self.hotkey_display.setText("+".join(display_keys))
+
     def apply_settings(self):
         self.selected_device = self.device_combo.currentData()
         if self.parent:
             self.parent.selected_device = self.selected_device
+            if self.current_hotkey:
+                self.parent.update_hotkey(self.current_hotkey)
         self.hide()  # Hide instead of close
 
     def closeEvent(self, event):

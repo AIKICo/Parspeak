@@ -206,3 +206,8 @@ class TranscriptionWindow(QWidget):
         except queue.Empty:
             pass
         return True  # Keep the timer running
+
+    def update_hotkey(self, new_combination):
+        """Update the hotkey combination used for recording"""
+        if hasattr(self, 'transcription_state'):
+            self.transcription_state.update_hotkey(new_combination)

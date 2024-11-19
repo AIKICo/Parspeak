@@ -27,8 +27,17 @@ class TranscriptionState:
     def __init__(self):
         self.full_result = []
         self.current_partial = ""
+        self.hotkey_combination = {'\\x03', 'Key.shift', 's'}  # Default Ctrl+Shift+S
+
+    def update_hotkey(self, new_combination):
+        self.hotkey_combination = set(new_combination)
 
 transcription_state = TranscriptionState()
+
+def check_hotkey_match(pressed_keys, target_combination):
+    # Convert all keys to strings for comparison
+    pressed_str = {str(k) for k in pressed_keys}
+    return pressed_str == target_combination
 
 def audio_preprocessing(audio_data):
     # Convert bytes to numpy array
@@ -114,9 +123,7 @@ def record(transcription_queue, control_event):
                 nonlocal recording, break_loop, pressed_keys, rec, audio_data, recording_start_time
                 pressed_keys.add(key)
                 try:
-                    if (keyboard.Key.ctrl in pressed_keys and
-                        keyboard.Key.shift in pressed_keys and
-                        keyboard.KeyCode.from_char('s') in pressed_keys):
+                    if check_hotkey_match(pressed_keys, transcription_state.hotkey_combination):
                         recording = not recording
                         if recording:
                             # Only clear full_result when starting a new recording
