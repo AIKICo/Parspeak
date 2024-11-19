@@ -164,63 +164,67 @@ def record(transcription_queue, control_event):
             listener = keyboard.Listener(on_press=on_press, on_release=on_release)
             listener.start()  # Start the listener outside the loop
 
-            while not control_event.is_set():  # Change break_loop to use control_event
-                if recording and rec is not None:  # Ensure rec exists
-                    try:
-                        if not q.empty():
-                            data = q.get()
-                            processed_data = audio_preprocessing(data)
-                            
-                            # Accumulate small chunks before processing
-                            audio_data.append(processed_data)
-                            
-                            # Process in larger chunks for better accuracy
-                            if len(audio_data) >= 4:  # Process every 4 chunks
-                                combined_data = b''.join(audio_data)
-                                if rec.AcceptWaveform(combined_data):
-                                    result = rec.Result()
-                                    if result and len(result) > 2:
-                                        result_dict = json.loads(result)
-                                        if "text" in result_dict and result_dict["text"]:
-                                            transcription_state.full_result.append(result_dict["text"])
+            try:
+                while not control_event.is_set():  # Change break_loop to use control_event
+                    if recording and rec is not None:  # Ensure rec exists
+                        try:
+                            if not q.empty():
+                                data = q.get()
+                                processed_data = audio_preprocessing(data)
+                                
+                                # Accumulate small chunks before processing
+                                audio_data.append(processed_data)
+                                
+                                # Process in larger chunks for better accuracy
+                                if len(audio_data) >= 4:  # Process every 4 chunks
+                                    combined_data = b''.join(audio_data)
+                                    if rec.AcceptWaveform(combined_data):
+                                        result = rec.Result()
+                                        if result and len(result) > 2:
+                                            result_dict = json.loads(result)
+                                            if "text" in result_dict and result_dict["text"]:
+                                                transcription_state.full_result.append(result_dict["text"])
+                                                transcription = " ".join(filter(None, transcription_state.full_result))
+                                                if transcription_state.current_partial:
+                                                    transcription += " " + transcription_state.current_partial
+                                                transcription_queue.put(("update", transcription))
+                                    audio_data = []  # Clear processed chunks
+                                
+                                # Only show partial results after minimum duration
+                                elif recording_start_time and (datetime.now() - recording_start_time).total_seconds() >= MIN_RECORDING_DURATION:
+                                    partial = rec.PartialResult()
+                                    if partial and len(partial) > 2:
+                                        partial_dict = json.loads(partial)
+                                        if "partial" in partial_dict:
+                                            transcription_state.current_partial = partial_dict["partial"]
                                             transcription = " ".join(filter(None, transcription_state.full_result))
                                             if transcription_state.current_partial:
                                                 transcription += " " + transcription_state.current_partial
                                             transcription_queue.put(("update", transcription))
-                                audio_data = []  # Clear processed chunks
-                            
-                            # Only show partial results after minimum duration
-                            elif recording_start_time and (datetime.now() - recording_start_time).total_seconds() >= MIN_RECORDING_DURATION:
-                                partial = rec.PartialResult()
-                                if partial and len(partial) > 2:
-                                    partial_dict = json.loads(partial)
-                                    if "partial" in partial_dict:
-                                        transcription_state.current_partial = partial_dict["partial"]
-                                        transcription = " ".join(filter(None, transcription_state.full_result))
-                                        if transcription_state.current_partial:
-                                            transcription += " " + transcription_state.current_partial
-                                        transcription_queue.put(("update", transcription))
-                            
-                            if dump_fn is not None:
-                                dump_fn.write(processed_data)
-                    except Exception as e:
-                        print("Error processing audio frame:", str(e))
-                else:
-                    if prev_recording and rec and audio_data:
-                        try:
-                            final_result = rec.FinalResult()
-                            final_dict = json.loads(final_result)
-                            if "text" in final_dict and final_dict["text"]:
-                                transcription_state.full_result.append(final_dict["text"])
-                                transcription = " ".join(filter(None, transcription_state.full_result))
-                                print("Transcription:", transcription)
+                                
+                                if dump_fn is not None:
+                                    dump_fn.write(processed_data)
                         except Exception as e:
-                            print("Error getting final result:", str(e))
-                        finally:
-                            audio_data = []
-                            rec = None
-                    time.sleep(0.1)  # Pause briefly to prevent high CPU usage
-                prev_recording = recording
+                            print("Error processing audio frame:", str(e))
+                    else:
+                        if prev_recording and rec and audio_data:
+                            try:
+                                final_result = rec.FinalResult()
+                                final_dict = json.loads(final_result)
+                                if "text" in final_dict and final_dict["text"]:
+                                    transcription_state.full_result.append(final_dict["text"])
+                                    transcription = " ".join(filter(None, transcription_state.full_result))
+                                    print("Transcription:", transcription)
+                            except Exception as e:
+                                print("Error getting final result:", str(e))
+                            finally:
+                                audio_data = []
+                                rec = None
+                        time.sleep(0.1)  # Pause briefly to prevent high CPU usage
+                    prev_recording = recording
+            finally:
+                # Stop keyboard listener when recording stops
+                listener.stop()
 
     except KeyboardInterrupt:
         print("\nDone")

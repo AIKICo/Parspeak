@@ -158,10 +158,6 @@ class TranscriptionWindow(QWidget):
             self.toggle_visibility()
 
     def quit_app(self):
-        global listener
-        # Stop keyboard listener
-        if listener:
-            listener.stop()
         # Hide tray icon before quitting
         self.tray_icon.hide()
         # Signal the recording thread to stop
