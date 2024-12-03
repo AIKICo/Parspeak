@@ -8,7 +8,6 @@ from datetime import datetime
 
 import numpy as np
 import sounddevice as sd
-import pyperclip
 from vosk import Model, KaldiRecognizer
 from pynput import keyboard
 from PyQt6.QtGui import QFontDatabase
