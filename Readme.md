@@ -9,13 +9,6 @@ Parspeak is a real-time speech recognition application that transcribes speech i
 - System tray integration with quick access to settings.
 - GUI overlay for displaying transcribed text on the screen.
 
-## Prerequisites
-
-- Python 3.7 or higher.
-- [Vosk API](https://github.com/alphacep/vosk-api) installed.
-- The Vosk Persian model placed in the `models` directory.
-- Required Python packages listed in `requirements.txt`.
-
 ## Installation
 
 1. **Clone the repository:**
@@ -41,4 +34,14 @@ Parspeak is a real-time speech recognition application that transcribes speech i
 4. **Download and set up the Vosk model:**
 
    - Download the Persian model from [Vosk Models](https://alphacephei.com/vosk/models).
-   - Extract the model into the `models` directory. Ensure the path is `models/vosk-model-small-fa-0.42`.
+   - Extract the model into the `models` directory. Ensure to update the path in main.py the path is `models/vosk-model-small-fa-0.42`.
+
+## Licenses
+
+### Vosk Models
+The Vosk speech recognition models are licensed under the Apache License 2.0.
+For more information, visit: https://github.com/alphacep/vosk-api/blob/master/LICENSE
+
+### PyQt6
+PyQt6 is licensed under the GNU General Public License v3.
+For more information, visit: https://www.riverbankcomputing.com/software/pyqt/license
