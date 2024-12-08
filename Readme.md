@@ -32,9 +32,10 @@ Parspeak is a real-time speech recognition application that transcribes speech i
    ```
 
 4. **Download and set up the Vosk model:**
-
-   - Download the Persian model from [Vosk Models](https://alphacephei.com/vosk/models).
-   - Extract the model into the `models` directory. Ensure to update the path in main.py the path is `models/vosk-model-small-fa-0.42`.
+   - You can use the existing model located at 'models/' directory or
+      - Download the Persian model from [Vosk Models](https://alphacephei.com/vosk/models).
+      - Extract the model into the `models` directory. Ensure to update the path in main.py the path is `models/vosk-model-small-fa-0.42`.
+Note: if 
 
 ## Licenses
 
