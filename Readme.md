@@ -14,7 +14,7 @@ Parspeak is a real-time speech recognition application that transcribes speech i
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/parspeak.git
+   git clone https://github.com/omid3098/parspeak.git
    cd parspeak
    ```
 
