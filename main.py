@@ -95,7 +95,7 @@ def record(transcription_queue, control_event):
         device = None
 
         # Update model path to point to the extracted folder
-        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "vosk-model-small-fa-0.42")
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "vosk-model-fa-0.42")
         if not os.path.exists(model_path):
             print(f"Error: Model not found at {model_path}")
             print("Please download the model from https://alphacephei.com/vosk/models")
